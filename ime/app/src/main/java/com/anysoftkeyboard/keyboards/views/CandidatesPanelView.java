@@ -31,7 +31,7 @@ import com.menny.android.anysoftkeyboard.R;
 import java.util.List;
 
 /**
- * A Gboard-style panel with all candidates in a scrollable grid, shown in place of the keyboard.
+ * A panel with all candidates in a scrollable grid, shown in place of the keyboard.
  * Tapping a candidate reports its strip index; ▲ closes the panel.
  */
 public class CandidatesPanelView extends LinearLayout {

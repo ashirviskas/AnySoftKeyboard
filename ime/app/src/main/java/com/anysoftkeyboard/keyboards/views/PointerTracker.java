@@ -37,7 +37,7 @@ class PointerTracker {
     int multiTapKeyTimeout;
     boolean applyTouchTrajectoryCorrection = true;
 
-    /** Gboard-like cursor control: dragging along the space bar sends ← / →. */
+    /** Cursor control: dragging along the space bar sends ← / →. */
     boolean spaceBarSlideMovesCursor = false;
 
     /** Horizontal distance (px) per cursor step while sliding on the space bar. */

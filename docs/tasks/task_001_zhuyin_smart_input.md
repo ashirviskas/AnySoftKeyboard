@@ -11,8 +11,8 @@ AnySoftKeyboard **already ships a Zhuyin keyboard**, inside the `chinese_traditi
 (`addons/languages/chinese_traditional`, commit `c0494f702` and follow-ups). It is a
 **per-character table lookup**. You type one full syllable (ㄋㄧˇ), the strip shows every
 character with that reading (你 擬 妳 …), and space commits one character. This is roughly
-where Taiwanese IMEs were in the 1980s. Modern Zhuyin IMEs (McBopomofo, libchewing, Gboard
-注音) are **phrase- and sentence-level**. You type a whole run of syllables (ㄋㄧˇㄏㄠˇㄇㄚ˙),
+where Taiwanese IMEs were in the 1980s. Modern Zhuyin IMEs (McBopomofo, libchewing, phone
+keyboards) are **phrase- and sentence-level**. You type a whole run of syllables (ㄋㄧˇㄏㄠˇㄇㄚ˙),
 the engine converts the run to the most likely Hanzi sentence (你好嗎), and you only fix the
 segments it got wrong.
 
@@ -48,6 +48,9 @@ to develop and test it on an 8 GB dev machine.
 | 26-key rows | "26 char keyb should keep some special butons as qwerty lol, now it looks a bit weird and useless" → row 3 = ⇧ z…m ⌫ like QWERTY; ⇧+letter types Latin capitals (the engine only takes lowercase) |
 | z hint | "where's the Z lol? Under Fo it's weird" → the ㄈ key's hint was 符; now z |
 | 大千 split | "Make zhuyin two options - with and without big comma and dot inside the letter section" / "I mean split main one into two" → 注音 (bottom-row ，。 only, keeps its id) + new 注音 ，。 (also in rows 2-3) |
+| Ortholinear 注音 | "I like keys being ortholinear" (picked the 4×10 grid mockup) → 注音 = four rows of ten equal keys in aligned columns; ㄦ and ⌫ in the bottom row; ？ on long-press ，, 「 on long-press 。 (注音 ，。 keeps the classic rows) |
+| Wording | "Don't mention gboard like grid in task file or the code pls" → no references to other keyboards in code, XML or this file's own text (user quotes stay verbatim) |
+| Dot position | "I dislike spacebar placement, move big dot to the left of it pls" → bottom row ☺ ， 。 [space] ㄦ ⌫ ⏎ |
 | Layouts / punctuation | "Also the punctuation on the bottom can also be replaced maybe. What are some common bopomofo layouts? Could be maybe one of the layout options" → subtask 1.14. Picks: layouts "**Does it really hurt to do most common ones?**" → Standard 大千 + 許氏 Hsu 26 + 倚天 ETen 41 + 倚天26 ETen 26; bottom row "**Maybe ?, big comma, space, big dot, quotation**" → ？ ， [space] 。 「 (popups for more); "**can we show numbers and latin letters as outlines or something on the keeb?** So that you know where to look for a latin character" → faint Latin/digit hint on every key |
 | Device testing | "I have android phone which I can connect via **wireless adb** maybe." / "Maybe **tell me how to connect later, when it is ready for testing**" → give wireless-adb steps at subtask 1.8 |
 
@@ -456,10 +459,10 @@ graph LR
 | 1.7 | Pack: dictionary entry, old `zhuyin_radicals` removed, README/NOTICE | ✅ | `addons/languages/chinese_traditional/` |
 | 1.8 | Gradle build + Robolectric run, formatting, on-device test over wireless adb + screenshots (see *On-device testing*) | 🔄 in progress | |
 | 1.9 | (phase 2) bigram LM → measure → neural reranker (D) if needed | ⏳ optional | |
-| 1.10 | Gboard-style expanded candidate panel: ▾ arrow + swipe-up open a grid of all candidates | ✅ `CandidatesPanelView`, `ExpandCandidatesAction`, 3 IME tests, verified on device | `keyboards/views/CandidatesPanelView.java` |
+| 1.10 | Expanded candidate panel: ▾ arrow + swipe-up open a grid of all candidates | ✅ `CandidatesPanelView`, `ExpandCandidatesAction`, 3 IME tests, verified on device | `keyboards/views/CandidatesPanelView.java` |
 | 1.11 | Zhuyin inline: composition shows Bopomofo (pinned segments as Hanzi), backspace edits symbol by symbol, backspace after a pin undoes it (and its learning) | ✅ verified on device; also fixed the "ㄋㄧˇㄏ loses ㄏ" report (no longer reproduces with the user's settings) | `ZhuyinComposer.java` |
 | 1.12 | Per-keyboard (per-language) autocorrect switch | ⏳ | |
-| 1.13 | Spacebar slide moves the cursor (Gboard-like), setting in Gestures; suppresses space-bar swipe left/right while on | ✅ `PointerTracker` + 2 view tests | `keyboards/views/PointerTracker.java` |
+| 1.13 | Spacebar slide moves the cursor, setting in Gestures; suppresses space-bar swipe left/right while on | ✅ `PointerTracker` + 2 view tests | `keyboards/views/PointerTracker.java` |
 | 1.14 | Layouts: + 許氏 Hsu 26, 倚天 ETen 41, 倚天26 ETen 26 (`KeyLayout` strategy, 12 tests); bottom row ？ ， space 。 「; Latin/digit hints on keys | ✅ verified on device (Hsu typing 你好, ETen layout) | `KeyLayout.java`, `qwerty_zhuyin_*.xml` |
 
 ## Verification status
