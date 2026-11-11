@@ -39,6 +39,7 @@ import com.anysoftkeyboard.keyboards.views.CandidateView;
 import com.anysoftkeyboard.keyboards.views.CandidatesPanelView;
 import com.anysoftkeyboard.keyboards.views.KeyboardViewContainerView;
 import com.anysoftkeyboard.phonetic.Candidate;
+import com.anysoftkeyboard.phonetic.KeyLayout;
 import com.anysoftkeyboard.phonetic.PhraseTable;
 import com.anysoftkeyboard.phonetic.UserModel;
 import com.anysoftkeyboard.phonetic.ZhuyinComposer;
@@ -154,7 +155,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
 
   private static final String PHONETIC_USER_MODEL_FILE = "zhuyin_user_model.txt";
 
-  /** ▾ in the strip: opens the all-candidates panel while composing Zhuyin. */
+  /** ▼ in the strip: opens the all-candidates panel while composing Zhuyin. */
   final ExpandCandidatesAction mExpandCandidatesAction = new ExpandCandidatesAction();
 
   /*
@@ -184,7 +185,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
 
   @VisibleForTesting
   final CancelSuggestionsAction mCancelSuggestionsAction =
-      new CancelSuggestionsAction(() -> abortCorrectionAndResetPredictionState(true));
+      new CancelSuggestionsAction(this::cancelSuggestionsStrip);
 
   /*
    * Configuration flag. Should we support dictionary suggestions
@@ -480,6 +481,9 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
 
   @Override
   public void onFinishInput() {
+    // Before super: the framework finishes the composing text itself, after which a commit would
+    // append the conversion next to the shown Bopomofo instead of replacing it.
+    commitPendingPhonetic();
     super.onFinishInput();
     savePhoneticUserModel();
     mCancelSuggestionsAction.setCancelIconVisible(false);
@@ -493,6 +497,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
 
   @Override
   public void onFinishInputView(boolean finishingInput) {
+    commitPendingPhonetic(); // before super, see onFinishInput
     super.onFinishInputView(finishingInput);
     closeCandidatesPanel();
     abortCorrectionAndResetPredictionState(true);
@@ -718,11 +723,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
    * @return {@code true} if a composition was committed.
    */
   private boolean commitPendingRadical() {
-    if (mPhoneticComposer != null && mPhoneticComposer.isComposing()) {
-      mPhoneticComposer.commitAll();
-      syncPhoneticComposition(mPhoneticComposer);
-      return true;
-    }
+    if (commitPendingPhonetic()) return true;
     if (mWord.isEmpty()) return false;
     if (mInputFieldIsPassword
         || !isCurrentKeyboardRadical()
@@ -739,6 +740,23 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
     mPromotedRadicalCandidate = null;
     mPromotedRadicalBuffer = null;
     if (ic != null) ic.endBatchEdit();
+    return true;
+  }
+
+  /**
+   * The strip's ⊗: stop suggesting for this field. A Zhuyin composition keeps exactly what was
+   * typed (its Bopomofo), instead of committing a conversion the user did not ask for.
+   */
+  void cancelSuggestionsStrip() {
+    finishPhoneticComposition(true);
+    abortCorrectionAndResetPredictionState(true);
+  }
+
+  /** Commits an open Zhuyin composition (converted). Returns true if there was one. */
+  private boolean commitPendingPhonetic() {
+    if (mPhoneticComposer == null || !mPhoneticComposer.isComposing()) return false;
+    mPhoneticComposer.commitAll();
+    syncPhoneticComposition(mPhoneticComposer);
     return true;
   }
 
@@ -764,6 +782,9 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
       mPhoneticComposerTable = table;
     }
     mPhoneticComposer.setLearning(!mSuggest.isIncognitoMode());
+    final AnyKeyboard keyboard = getCurrentAlphabetKeyboard();
+    mPhoneticComposer.setLayout(
+        KeyLayout.byName(keyboard == null ? null : keyboard.getPhoneticLayout()));
     return mPhoneticComposer;
   }
 
@@ -795,6 +816,15 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
                   && (composer.onKey(primaryCode)
                       || (wasComposing && commitAndPassThrough(composer)));
         };
+    if (consumed && !wasComposing && !mWord.isEmpty()) {
+      // A word composed the usual way is still open: keep it as typed (and the cursor where it
+      // is), or the new Zhuyin composition would replace it.
+      final InputConnection ic = getCurrentInputConnection();
+      if (ic != null) ic.finishComposingText();
+      prepareWordComposerForNextWord();
+      mWordRevertLength = 0;
+      mPhoneticComposingStart = -1;
+    }
     if (consumed || wasComposing) syncPhoneticComposition(composer);
     return consumed;
   }
@@ -924,7 +954,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
     return isCandidatesPanelShown() || super.hasStuffToClose();
   }
 
-  /** The ▾ strip button that opens the all-candidates panel. */
+  /** The ▼ strip button that opens the all-candidates panel. */
   final class ExpandCandidatesAction implements KeyboardViewContainerView.StripActionProvider {
     @Nullable private TextView mRootView;
     private boolean mVisible;
@@ -932,7 +962,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
     @Override
     public @NonNull View inflateActionView(@NonNull ViewGroup parent) {
       final TextView view = new TextView(parent.getContext());
-      view.setText("▾");
+      view.setText("▼");
       view.setGravity(android.view.Gravity.CENTER);
       final float density = parent.getResources().getDisplayMetrics().density;
       final int padding = Math.round(14 * density);
@@ -943,6 +973,11 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
       if (keyboardView instanceof AnyKeyboardView anyKeyboardView) {
         view.setTextColor(
             anyKeyboardView.getCurrentResourcesHolder().getKeyTextColor().getDefaultColor());
+        // Opaque, so the button does not sit on top of candidate text.
+        final android.graphics.drawable.Drawable background = anyKeyboardView.getBackground();
+        if (background != null && background.getConstantState() != null) {
+          view.setBackground(background.getConstantState().newDrawable().mutate());
+        }
       }
       view.setOnClickListener(v -> openCandidatesPanel());
       view.setVisibility(mVisible ? View.VISIBLE : View.GONE);
@@ -969,6 +1004,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
    *     text, including a half-typed syllable, replaces the composing region.
    */
   private void finishPhoneticComposition(boolean userMovedCursor) {
+    mExpandCandidatesAction.setVisible(false);
     mPhoneticComposingStart = -1;
     mPhoneticCandidates = Collections.emptyList();
     if (mPhoneticComposer == null || !mPhoneticComposer.isComposing()) return;
@@ -1574,7 +1610,7 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
     // In radical mode, never restart word suggestions on committed CJK text.
     // Once a radical-composed character is committed, it should not be pulled
     // back into the composition buffer.
-    if (isRadicalInputMode()) {
+    if (isRadicalInputMode() || isPhoneticInputMode()) {
       return false;
     }
     if (!isPredictionOn()
@@ -2151,6 +2187,8 @@ public abstract class AnySoftKeyboardSuggestions extends AnySoftKeyboardKeyboard
             || !TextUtils.equals(
                 previousAlphabetKeyboard.getKeyboardId(), keyboard.getKeyboardId());
     if (alphabetKeyboardChanged) {
+      // Leaving the keyboard of an open Zhuyin composition commits its conversion.
+      commitPendingPhonetic();
       if (previousAlphabetKeyboard != null && previousAlphabetKeyboard.isRadicalKeyboard()) {
         // Switching out of a radical keyboard to a different keyboard: commit the radicals.
         commitPendingRadical();

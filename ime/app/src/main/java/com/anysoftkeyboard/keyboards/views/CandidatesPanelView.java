@@ -32,7 +32,7 @@ import java.util.List;
 
 /**
  * A Gboard-style panel with all candidates in a scrollable grid, shown in place of the keyboard.
- * Tapping a candidate reports its strip index; ▴ closes the panel.
+ * Tapping a candidate reports its strip index; ▲ closes the panel.
  */
 public class CandidatesPanelView extends LinearLayout {
 
@@ -55,7 +55,7 @@ public class CandidatesPanelView extends LinearLayout {
     setOrientation(VERTICAL);
 
     mClose = new TextView(context);
-    mClose.setText("▴");
+    mClose.setText("▲");
     mClose.setGravity(Gravity.CENTER);
     mClose.setMinWidth(dp(64)); // a real touch target, not just the glyph
     mClose.setMinHeight(dp(48));

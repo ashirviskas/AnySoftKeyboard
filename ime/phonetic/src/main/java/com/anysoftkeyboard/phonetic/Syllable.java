@@ -131,6 +131,25 @@ public final class Syllable {
     return mTone;
   }
 
+  /** The initial symbol (ㄅ…ㄙ), or 0 if none. */
+  public char initial() {
+    return mInitial == 0 ? 0 : INITIALS.charAt(mInitial - 1);
+  }
+
+  /** The medial symbol (ㄧㄨㄩ), or 0 if none. */
+  public char medial() {
+    return mMedial == 0 ? 0 : MEDIALS.charAt(mMedial - 1);
+  }
+
+  /** The final symbol (ㄚ…ㄦ), or 0 if none. */
+  public char finalSymbol() {
+    return mFinal == 0 ? 0 : FINALS.charAt(mFinal - 1);
+  }
+
+  public Syllable withoutInitial() {
+    return new Syllable(0, mMedial, mFinal, mTone);
+  }
+
   /** True for tones 2-5 (ˊ ˇ ˋ ˙). The first tone, and no tone, have no mark. */
   public boolean hasVisibleToneMark() {
     return mTone > TONE_FIRST;

@@ -194,6 +194,148 @@ public class AnySoftKeyboardPhoneticTest extends AnySoftKeyboardBaseTest {
     throw new AssertionError(text + " not in the panel");
   }
 
+  // --- state-machine scenarios: commit, cancel, delete, move, switch ---
+
+  @Test
+  public void testDeleteAfterCommitDeletesExactlyOneChar() {
+    type("ㄋㄧˇㄏㄠˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    Assert.assertEquals("你好", text());
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.DELETE);
+    Assert.assertEquals("你", text());
+    // and a new composition starts cleanly after it
+    type("ㄇㄚ˙");
+    Assert.assertEquals("你ㄇㄚ˙", text());
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    Assert.assertEquals("你嗎", text());
+  }
+
+  @Test
+  public void testDeleteAfterPickedHeadDeletesOnlyComposingSymbols() {
+    type("ㄋㄧˇㄏㄠˇ");
+    pick("你");
+    Assert.assertEquals("你ㄏㄠˇ", text());
+    for (int i = 0; i < 3; i++) mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.DELETE);
+    Assert.assertEquals("你", text());
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.DELETE);
+    Assert.assertEquals("", text());
+  }
+
+  @Test
+  public void testCancelStripKeepsTypedZhuyin() {
+    type("ㄋㄧˇㄏㄠˇ");
+    ((AnySoftKeyboardSuggestions) mAnySoftKeyboardUnderTest).cancelSuggestionsStrip();
+    Assert.assertEquals("ㄋㄧˇㄏㄠˇ", text());
+    // nothing is composing anymore: delete is a plain delete
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.DELETE);
+    Assert.assertEquals("ㄋㄧˇㄏㄠ", text());
+  }
+
+  @Test
+  public void testFieldClosingCommitsConversion() {
+    type("ㄋㄧˇㄏㄠ");
+    simulateFinishInputFlow();
+    Assert.assertEquals("你好", text());
+  }
+
+  @Test
+  public void testSymbolsKeyboardCommitsConversion() {
+    type("ㄋㄧˇㄏㄠˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.MODE_SYMBOLS);
+    Assert.assertEquals("你好", text());
+  }
+
+  @Test
+  public void testSwitchingToTheSameKeyboardKeepsComposition() {
+    // Only one alphabet keyboard is enabled here, so "next language" lands on the same keyboard
+    // (a real switch commits, see onAlphabetKeyboardSet / commitPendingPhonetic).
+    type("ㄋㄧˇㄏㄠˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.MODE_ALPHABET);
+    Assert.assertEquals("ㄋㄧˇㄏㄠˇ", text());
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    Assert.assertEquals("你好", text());
+  }
+
+  @Test
+  public void testTappingElsewhereKeepsTypedTextAndCursor() {
+    mAnySoftKeyboardUnderTest.simulateTextTyping("ab ");
+    type("ㄋㄧˇ");
+    Assert.assertEquals("ab ㄋㄧˇ", text());
+    com.anysoftkeyboard.rx.TestRxSchedulers.foregroundAdvanceBy(2000);
+    mAnySoftKeyboardUnderTest.moveCursorToPosition(1, true);
+    Assert.assertEquals("ab ㄋㄧˇ", text());
+    // a new composition starts where the user tapped, the old one is left alone
+    type("ㄇㄚ˙");
+    Assert.assertEquals("aㄇㄚ˙b ㄋㄧˇ", text());
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    Assert.assertEquals("a嗎b ㄋㄧˇ", text());
+  }
+
+  @Test
+  public void testTappingElsewhereRightAfterTyping() {
+    mAnySoftKeyboardUnderTest.simulateTextTyping("ab ");
+    type("ㄋㄧˇ");
+    mAnySoftKeyboardUnderTest.moveCursorToPosition(1, true); // within ASK's 1.5 s window
+    type("ㄇㄚ˙");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    Assert.assertEquals("a嗎b ㄋㄧˇ", text());
+  }
+
+  @Test
+  public void testBackAndForthThenInsertAndCommit() {
+    type("ㄋㄧˇㄇㄚ˙");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.ARROW_LEFT);
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.ARROW_LEFT);
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.ARROW_RIGHT);
+    type("ㄏㄠˇ");
+    Assert.assertEquals("ㄋㄧˇㄏㄠˇㄇㄚ˙", text());
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.ENTER);
+    Assert.assertEquals("你好嗎", text());
+  }
+
+  @Test
+  public void testArrowPastTheEndCommitsAndMovesOn() {
+    mAnySoftKeyboardUnderTest.simulateTextTyping("ab");
+    mAnySoftKeyboardUnderTest.moveCursorToPosition(1, true);
+    com.anysoftkeyboard.rx.TestRxSchedulers.foregroundAdvanceBy(2000);
+    type("ㄋㄧˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.ARROW_RIGHT);
+    Assert.assertEquals("a你b", text());
+  }
+
+  @Test
+  public void testShiftDoesNotCommit() {
+    type("ㄋㄧˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(KeyCodes.SHIFT);
+    Assert.assertEquals("ㄋㄧˇ", text());
+    type("ㄏㄠˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    Assert.assertEquals("你好", text());
+  }
+
+  @Test
+  public void testPopupTextCommitsFirst() {
+    type("ㄋㄧˇㄏㄠˇ");
+    mAnySoftKeyboardUnderTest.onText(null, "1", true);
+    Assert.assertEquals("你好1", text());
+  }
+
+  @Test
+  public void testFullWidthPunctuationAfterComposition() {
+    type("ㄋㄧˇㄏㄠˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress('？');
+    Assert.assertEquals("你好？", text());
+  }
+
+  @Test
+  public void testDoubleSpaceAfterCommitDoesNotEatText() {
+    type("ㄋㄧˇ");
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    mAnySoftKeyboardUnderTest.simulateKeyPress(' ');
+    Assert.assertEquals("你  ", text());
+  }
+
   @Test
   public void testNonBopomofoWithoutCompositionIsTypedNormally() {
     mAnySoftKeyboardUnderTest.simulateKeyPress('a');

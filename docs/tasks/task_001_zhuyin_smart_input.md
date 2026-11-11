@@ -42,6 +42,12 @@ to develop and test it on an 8 GB dev machine.
 | Spacebar cursor | "Also **allow to use spacebar to scroll the cursor**, kinda like gboard or iphone." → subtask 1.13: new setting "Slide on space bar moves the cursor" (default off; on in the user's dev copy) |
 | Autocorrect | "I also have disabled autocorrect as it sucks in Lithuanian and English. **Can we keep it on per language only?**" → subtask 1.12 (Zhuyin does not depend on the global switch) |
 | Dev keyboard default | "Also **no need to ever reset to non-dev**." → the dev IME stays the phone's default |
+| Stress test | "Also do some tests, such as writing something, cancelling something, cancelling commiting, maybe deleting, going back and forth, switching languages and see if any bugs pop up." → 15 IME scenario tests + an on-device pass; bugs found and fixed are listed under *Stress-test findings* |
+| Comma/dot | "You still have not moved comma nad dot out of hte main layout, can you do it?" → ， and 。 removed from 大千 rows 2-3 (now 10 wider keys each); they live in the bottom row |
+| Theme | "It's ok, we can switch to other theme on dev" / "your selected theme is terribly disgusting … full of blue and green" → dev copy uses Yochees Dark 2 (neutral, draws hints) instead of Power Saving (hint size 0px) |
+| 26-key rows | "26 char keyb should keep some special butons as qwerty lol, now it looks a bit weird and useless" → row 3 = ⇧ z…m ⌫ like QWERTY; ⇧+letter types Latin capitals (the engine only takes lowercase) |
+| z hint | "where's the Z lol? Under Fo it's weird" → the ㄈ key's hint was 符; now z |
+| 大千 split | "Make zhuyin two options - with and without big comma and dot inside the letter section" / "I mean split main one into two" → 注音 (bottom-row ，。 only, keeps its id) + new 注音 ，。 (also in rows 2-3) |
 | Layouts / punctuation | "Also the punctuation on the bottom can also be replaced maybe. What are some common bopomofo layouts? Could be maybe one of the layout options" → subtask 1.14. Picks: layouts "**Does it really hurt to do most common ones?**" → Standard 大千 + 許氏 Hsu 26 + 倚天 ETen 41 + 倚天26 ETen 26; bottom row "**Maybe ?, big comma, space, big dot, quotation**" → ？ ， [space] 。 「 (popups for more); "**can we show numbers and latin letters as outlines or something on the keeb?** So that you know where to look for a latin character" → faint Latin/digit hint on every key |
 | Device testing | "I have android phone which I can connect via **wireless adb** maybe." / "Maybe **tell me how to connect later, when it is ready for testing**" → give wireless-adb steps at subtask 1.8 |
 
@@ -454,7 +460,7 @@ graph LR
 | 1.11 | Zhuyin inline: composition shows Bopomofo (pinned segments as Hanzi), backspace edits symbol by symbol, backspace after a pin undoes it (and its learning) | ✅ verified on device; also fixed the "ㄋㄧˇㄏ loses ㄏ" report (no longer reproduces with the user's settings) | `ZhuyinComposer.java` |
 | 1.12 | Per-keyboard (per-language) autocorrect switch | ⏳ | |
 | 1.13 | Spacebar slide moves the cursor (Gboard-like), setting in Gestures; suppresses space-bar swipe left/right while on | ✅ `PointerTracker` + 2 view tests | `keyboards/views/PointerTracker.java` |
-| 1.14 | Layouts: + 許氏 Hsu 26, 倚天 ETen 41, 倚天26 ETen 26; bottom row ？ ， space 。 「; Latin/digit hints on keys | 🔄 next | |
+| 1.14 | Layouts: + 許氏 Hsu 26, 倚天 ETen 41, 倚天26 ETen 26 (`KeyLayout` strategy, 12 tests); bottom row ？ ， space 。 「; Latin/digit hints on keys | ✅ verified on device (Hsu typing 你好, ETen layout) | `KeyLayout.java`, `qwerty_zhuyin_*.xml` |
 
 ## Verification status
 
@@ -470,6 +476,7 @@ graph LR
 | Formatting | ✅ google-java-format 1.25.2 (the exact jar `//:format` pins, sha256 verified) on all changed Java files. Bazel itself isn't installed |
 | On-device typing (Xiaomi 25010PN30G, Android 15; dev copy `…zhuyindev` side by side, real install untouched) | ✅ conversion, head-phrase pick, toneless typing, cursor pick, Enter commit. Screenshots `scratch/screenshots/07…13_*.png` |
 | `:ime:app` regression: `com.anysoftkeyboard.ime.*` + `com.anysoftkeyboard.AnySoftKeyboard*` (minus `StartUpAllSdkTest`) | ✅ 37 classes, 589 tests, 0 failures |
+| Full regression after layouts + stress fixes: phonetic + dictionaries + ime.* + AnySoftKeyboard* + keyboards.* + dictionaries.* | ✅ 1156 tests, 0 failures (7 skipped as in repo) |
 
 **Follow-up for 1.8:** add a Robolectric IME test (e.g. `AnySoftKeyboardPhoneticTest`) that
 feeds Bopomofo key codes through `TestableAnySoftKeyboard` with a Suggest whose
@@ -518,6 +525,21 @@ settings and dictionaries. So:
 4. On the PC: `! adb pair IP:PAIR_PORT` (enter the code), then `! adb connect IP:PORT` with the
    port from the main Wireless debugging screen (it differs from the pairing port).
 5. `! adb devices` should list the phone as `device`.
+
+## Stress-test findings (fixed)
+
+| # | Symptom | Cause | Fix |
+|---|---|---|---|
+| 1 | Closing the field left "ㄋㄧˇㄏㄠ你好" (Bopomofo + conversion) | `InputMethodService.onFinishInput` finishes the composing text before our hook, so committing after it appends | commit the composition at the **start** of `onFinishInputView` / `onFinishInput` |
+| 2 | After a delete or a tap elsewhere, the next Zhuyin key replaced the word around the cursor | ASK's "restart suggestions" turned that word into a composing region | `canRestartWordSuggestion()` is false in phonetic mode |
+| 3 | Starting Zhuyin while ASK's own word was composing replaced that word | our first `setComposingText` reused its composing region | finish that region first (`finishComposingText`, cursor kept) |
+| 4 | ⊗ (cancel suggestions) committed a conversion | it ran the field-closing path | ⊗ keeps the typed Bopomofo as is (`cancelSuggestionsStrip`) |
+| 5 | ▼ stayed visible after ⊗ / commit | not hidden when a composition ended outside `sync` | hidden in `finishPhoneticComposition` |
+| 6 | Second space after a Zhuyin commit ate the committed character | double-space→period used the commit-space timestamp | space timestamps are skipped in phonetic mode |
+| 7 | "ㄋㄧˇㄏ loses ㄏ" (user report, old build) | old Hanzi-inline rendering shrank the composing text | gone with Zhuyin inline; verified on device with the user's settings |
+| 8 | Strip ▼ looked tiny | the glyph was ▾ (U+25BE, the *small* triangle) | ▼ / ▲, 56 dp touch target, opaque background |
+
+Also noticed, *not* changed (vanilla ASK behavior): any selection change within 1.5 s of an IME edit counts as "expected" (`MAX_TIME_TO_EXPECT_SELECTION_UPDATE`), but our syncs always produce an update that consumes that window, so taps right after typing are still seen (covered by `testTappingElsewhereRightAfterTyping`).
 
 ## Gotchas (learned the hard way)
 

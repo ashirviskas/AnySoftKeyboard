@@ -56,6 +56,7 @@ public final class ZhuyinComposer implements ComposingEngine {
   private final PhraseTable mTable;
   private final UserModel mUserModel;
   private boolean mLearning = true;
+  private KeyLayout mLayout = KeyLayout.STANDARD;
 
   private final List<Syllable> mReadings = new ArrayList<>();
   private final List<Lattice.Node> mPins = new ArrayList<>();
@@ -75,6 +76,11 @@ public final class ZhuyinComposer implements ComposingEngine {
     return mUserModel;
   }
 
+  /** How keys map to Bopomofo (the keyboard's {@code phoneticLayout}). */
+  public void setLayout(KeyLayout layout) {
+    mLayout = layout;
+  }
+
   /** Disables learning from picks (incognito). */
   public void setLearning(boolean learning) {
     mLearning = learning;
@@ -83,30 +89,30 @@ public final class ZhuyinComposer implements ComposingEngine {
   @Override
   public boolean onKey(int codePoint) {
     if (codePoint == ' ') return onSpace();
-    final int kind = Syllable.kindOf(codePoint);
-    if (kind == Syllable.KIND_NONE) return false;
-    if (kind == Syllable.KIND_TONE) {
-      if (!mPending.isEmpty()) {
-        mPending = mPending.with(codePoint);
+    final KeyLayout.Edit edit = mLayout.onKey(mPending, codePoint, mTable::isKnownSyllable);
+    if (edit == null) return false;
+    switch (edit.type) {
+      case SET -> mPending = edit.syllable;
+      case CLOSE -> {
+        mPending = edit.syllable;
         closePending();
-      } else if (mCursor > 0) {
-        // A tone right after a closed syllable (re)sets its tone.
-        setReading(mCursor - 1, mReadings.get(mCursor - 1).with(codePoint));
       }
-      return true;
+      case CLOSE_AND_RETYPE -> {
+        // The key starts the next syllable; pending is empty afterwards, so this ends.
+        closePending();
+        return onKey(codePoint);
+      }
+      case RETONE -> {
+        // A tone right after a closed syllable (re)sets its tone.
+        if (mCursor > 0) setReading(mCursor - 1, mReadings.get(mCursor - 1).withTone(edit.tone));
+      }
     }
-    if (!mPending.isEmpty()
-        && mPending.highestFilledKind() >= kind
-        && mTable.isKnownSyllable(mPending.base())) {
-      closePending();
-    }
-    mPending = mPending.with(codePoint);
     return true;
   }
 
   private boolean onSpace() {
     if (!mPending.isEmpty()) {
-      mPending = mPending.withTone(Syllable.TONE_FIRST);
+      mPending = mLayout.finish(mPending).withTone(Syllable.TONE_FIRST);
       closePending();
       return true;
     }
@@ -301,7 +307,7 @@ public final class ZhuyinComposer implements ComposingEngine {
   }
 
   private void closePending() {
-    mReadings.add(mCursor, mPending);
+    mReadings.add(mCursor, mLayout.finish(mPending));
     shiftAfter(mCursor, +1);
     mCursor++;
     mPending = Syllable.EMPTY;
