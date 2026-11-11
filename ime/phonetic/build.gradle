@@ -1,0 +1,19 @@
+// Pure-JVM phonetic (Zhuyin) conversion engine. No Android dependencies, so its tests are plain
+// JUnit and run fast with little memory: ./gradlew :ime:phonetic:test
+apply plugin: 'java-library'
+
+apply from: "${rootDir}/gradle/jacoco.gradle"
+apply from: "${rootDir}/gradle/errorprone.gradle"
+
+dependencies {
+    testImplementation libs.junit
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(Test).configureEach {
+    maxHeapSize = "256m"
+}
