@@ -1,0 +1,47 @@
+---
+# Manually triggered: builds the side-by-side dev keyboard (application id suffix .zhuyindev, so it
+# installs next to a store AnySoftKeyboard without touching it) and the Traditional Chinese pack.
+# Actions tab -> zhuyin-dev-apk -> Run workflow -> pick the branch. APKs are in the run's
+# "zhuyin-dev-apks" artifact.
+name: zhuyin-dev-apk
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - uses: actions/setup-java@v5.2.0
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: 13114758
+      - name: Install NDK
+        run: echo "y" | sdkmanager "ndk;29.0.14206865"
+      - uses: gradle/actions/setup-gradle@v5
+      - name: setup
+        run: ./scripts/ci/ci_setup.sh
+      - name: stable debug signature
+        # The repo's debug keystore: every run is signed the same way, so new APKs install as
+        # updates over older ones (a fresh runner would otherwise generate a new random key).
+        run: |
+          mkdir -p "$HOME/.android"
+          cp .github/actions/deploy/debug.keystore "$HOME/.android/"
+      - name: build
+        run: >-
+          ./gradlew --init-script .github/zhuyindev.init.gradle
+          :ime:app:assembleDebug
+          :addons:languages:chinese_traditional:apk:assembleDebug
+      - name: collect
+        run: |
+          mkdir -p out
+          cp ime/app/build/outputs/apk/debug/app-debug.apk out/anysoftkeyboard-zhuyindev.apk
+          cp addons/languages/chinese_traditional/apk/build/outputs/apk/debug/apk-debug.apk \
+            out/chinese-traditional-pack.apk
+      - uses: actions/upload-artifact@v6.0.0
+        with:
+          name: zhuyin-dev-apks
+          path: out/*.apk

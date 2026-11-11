@@ -1,0 +1,18 @@
+// Gradle init script: gives the DEBUG keyboard app a separate application id,
+// so it installs NEXT TO an existing AnySoftKeyboard (Play/F-Droid) instead of conflicting with it.
+// Separate id = separate app data, so the real install and its settings are never touched.
+//
+// Usage: ./gradlew --init-script .github/zhuyindev.init.gradle :ime:app:assembleDebug
+// (CI: .github/workflows/zhuyin-dev-apk.yml)
+//
+// A suffix (not override_app_id) keeps the code namespace (com.menny.android.anysoftkeyboard.R)
+// unchanged. Provider authorities use ${applicationId}, so they get the suffix too.
+allprojects {
+    plugins.withId('com.android.application') {
+        if (project.path == ':ime:app') {
+            def debug = project.extensions.getByName('android').buildTypes.getByName('debug')
+            debug.applicationIdSuffix = '.zhuyindev'
+            debug.versionNameSuffix = '-zhuyindev'
+        }
+    }
+}
