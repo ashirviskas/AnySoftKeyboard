@@ -246,6 +246,99 @@ public class ZhuyinComposerTest {
     assertEquals("你好", mComposer.conversion());
   }
 
+  // --- toneless typing: the open syllable takes part in the conversion ---
+
+  @Test
+  public void testTonelessSingleSyllableHasCandidates() {
+    type(mComposer, "ㄋㄧ");
+    assertEquals("ㄋㄧ", mComposer.composingText()); // still open
+    final List<Candidate> candidates = mComposer.candidates();
+    assertTrue(candidates.size() > 3);
+    assertTrue(candidates.stream().anyMatch(c -> c.text.equals("你")));
+    assertEquals(candidates.get(0).text, mComposer.conversion());
+  }
+
+  @Test
+  public void testTonelessSentenceIsOfferedWhileTyping() {
+    type(mComposer, "ㄐㄧㄣㄊㄧㄢ"); // second syllable still open
+    assertEquals("今天", mComposer.candidates().get(0).text);
+    assertEquals("今天", mComposer.conversion());
+  }
+
+  @Test
+  public void testOpenSyllableCanStillGrow() {
+    type(mComposer, "ㄐㄧ"); // a real syllable already
+    type(mComposer, "ㄚ"); // but it continues
+    assertEquals("ㄐㄧㄚ", mComposer.composingText());
+    assertEquals("家", mComposer.candidates().get(0).text);
+  }
+
+  @Test
+  public void testPickingCandidateThatCoversTheOpenSyllable() {
+    type(mComposer, "ㄋㄧ");
+    mComposer.pick(candidate("你"));
+    assertEquals("你", mComposer.takeCommitText());
+    assertFalse(mComposer.isComposing());
+  }
+
+  @Test
+  public void testPickingHeadKeepsTheOpenSyllableComposing() {
+    type(mComposer, "ㄋㄧˇㄏㄠ");
+    mComposer.pick(candidate("妳"));
+    assertEquals("妳", mComposer.takeCommitText());
+    assertEquals("ㄏㄠ", mComposer.composingText());
+    assertEquals("好", mComposer.conversion());
+  }
+
+  // --- typing Bopomofo itself ---
+
+  @Test
+  public void testRawBopomofoIsTheLastCandidate() {
+    type(mComposer, "ㄋㄧˇ");
+    final List<Candidate> candidates = mComposer.candidates();
+    final Candidate last = candidates.get(candidates.size() - 1);
+    assertEquals(Candidate.Kind.RAW, last.kind);
+    assertEquals("ㄋㄧˇ", last.text);
+    mComposer.pick(last);
+    assertEquals("ㄋㄧˇ", mComposer.takeCommitText());
+  }
+
+  @Test
+  public void testRawBopomofoForASingleSymbol() {
+    type(mComposer, "ㄅ"); // a lone initial
+    mComposer.pick(candidate("ㄅ"));
+    assertEquals("ㄅ", mComposer.takeCommitText());
+    assertFalse(mComposer.isComposing());
+  }
+
+  @Test
+  public void testRawPickIsNotLearned() {
+    type(mComposer, "ㄋㄧˇ");
+    mComposer.pick(candidate("ㄋㄧˇ"));
+    mComposer.takeCommitText();
+    type(mComposer, "ㄋㄧˇ");
+    assertEquals("你", mComposer.conversion());
+  }
+
+  // --- impossible syllables ---
+
+  @Test
+  public void testEarlierSlotAfterImpossibleSyllableStartsNewSyllable() {
+    type(mComposer, "ㄋㄧㄛ"); // not a real syllable
+    type(mComposer, "ㄅㄚ"); // ㄅ must not replace ㄋ
+    assertEquals("ㄋㄧㄛ" + SEP + "ㄅㄚ", mComposer.composingText());
+    assertTrue(mComposer.conversion().startsWith("ㄋㄧㄛ"));
+  }
+
+  @Test
+  public void testLastSlotOfIncompleteSyllableIsCorrectedInPlace() {
+    type(mComposer, "ㄅㄩㄧ"); // ㄅㄩ is no syllable: the second medial replaces the first
+    assertEquals("ㄅㄧ", mComposer.composingText());
+    mComposer.reset();
+    type(mComposer, "ㄋㄨㄧ"); // ㄋㄨ is a syllable: ㄧ starts the next one
+    assertEquals("ㄋㄨ" + SEP + "ㄧ", mComposer.composingText());
+  }
+
   // --- edge cases ---
 
   @Test

@@ -96,13 +96,18 @@ public abstract class KeyLayout {
     return STANDARD;
   }
 
-  /** Typing a symbol after a complete syllable it cannot extend starts a new syllable. */
+  /**
+   * Whether {@code symbol} starts a new syllable instead of going into {@code pending}.
+   *
+   * <p>Only the last typed slot can be corrected in place (ㄋ then ㄇ gives ㄇ), and only while the
+   * syllable is not complete yet. A symbol for an earlier slot always starts a new syllable, even
+   * after an impossible one (ㄋㄧㄛ then ㄅ must not turn into ㄅㄧㄛ).
+   */
   static boolean startsNewSyllable(Syllable pending, char symbol, IntPredicate isKnownSyllable) {
     final int kind = Syllable.kindOf(symbol);
-    return !pending.isEmpty()
-        && kind != Syllable.KIND_TONE
-        && pending.highestFilledKind() >= kind
-        && isKnownSyllable.test(pending.base());
+    if (pending.isEmpty() || kind == Syllable.KIND_TONE) return false;
+    final int highest = pending.highestFilledKind();
+    return kind < highest || (kind == highest && isKnownSyllable.test(pending.base()));
   }
 
   /** 大千 / 倚天: one Bopomofo symbol per key; a filled slot is replaced. */

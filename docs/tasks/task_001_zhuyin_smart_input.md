@@ -51,6 +51,11 @@ to develop and test it on an 8 GB dev machine.
 | Ortholinear 注音 | "I like keys being ortholinear" (picked the 4×10 grid mockup) → 注音 = four rows of ten equal keys in aligned columns; ㄦ and ⌫ in the bottom row; ？ on long-press ，, 「 on long-press 。 (注音 ，。 keeps the classic rows) |
 | Wording | "Don't mention gboard like grid in task file or the code pls" → no references to other keyboards in code, XML or this file's own text (user quotes stay verbatim) |
 | Dot position | "I dislike spacebar placement, move big dot to the left of it pls" → bottom row ☺ ， 。 [space] ㄦ ⌫ ⏎ |
+| Bug report | "Top two rows on main keeb layout on hold have wrong chars. Like Bo has Q and 1, but Pho has Bo lol." → long-press on every Bopomofo key now gives exactly its hint (digit or Latin key), on both 大千 keyboards |
+| Bug report | "Suggestions don't appear without tones." → the open syllable is converted provisionally (toneless) and offered in the strip; a pick covering it closes it first |
+| Bug report | "If I type wrong bopoofo chars, nonexistant words, they can replace first char. Why and how?" → cause: an earlier-slot symbol replaced that slot when the syllable was not a real one (ㄋㄧㄛ + ㄅ → ㄅㄧㄛ); now only the last typed slot of an incomplete syllable is corrected in place, anything else starts a new syllable |
+| Raw Bopomofo | "Also should allow to type in standalone bpm character. WDyt? Like others" → the anchor syllable's own Bopomofo is the last candidate (Kind RAW, never learned); unknown syllables' Bopomofo fallbacks are RAW too |
+| CI build | "Can we push a build to gh somehow?" … "want" (a manual workflow for installable dev APKs) → `.github/workflows/zhuyin-dev-apk.yml` (workflow_dispatch): builds the `.zhuyindev` keyboard + the Chinese pack, signed with the repo's `.github/actions/deploy/debug.keystore` (stable across runs), artifact `zhuyin-dev-apks` |
 | Layouts / punctuation | "Also the punctuation on the bottom can also be replaced maybe. What are some common bopomofo layouts? Could be maybe one of the layout options" → subtask 1.14. Picks: layouts "**Does it really hurt to do most common ones?**" → Standard 大千 + 許氏 Hsu 26 + 倚天 ETen 41 + 倚天26 ETen 26; bottom row "**Maybe ?, big comma, space, big dot, quotation**" → ？ ， [space] 。 「 (popups for more); "**can we show numbers and latin letters as outlines or something on the keeb?** So that you know where to look for a latin character" → faint Latin/digit hint on every key |
 | Device testing | "I have android phone which I can connect via **wireless adb** maybe." / "Maybe **tell me how to connect later, when it is ready for testing**" → give wireless-adb steps at subtask 1.8 |
 
@@ -495,13 +500,13 @@ the real install fails on the signature, and the usual "fix" (uninstall) wipes t
 settings and dictionaries. So:
 
 - Build the keyboard with a **separate app id** through the init script
-  `scratch/zhuyindev.init.gradle`, which sets `applicationIdSuffix '.zhuyindev'` on `:ime:app`
+  `.github/zhuyindev.init.gradle`, which sets `applicationIdSuffix '.zhuyindev'` on `:ime:app`
   debug. A suffix, not `-Poverride_app_id`: that one also renames the R namespace and breaks the
   build. It is a separate app with separate data; provider authorities follow
   `${applicationId}`, and the app declares no `<permission>` or `sharedUserId`, so nothing
   clashes.
   ```
-  ./gradlew --init-script scratch/zhuyindev.init.gradle :ime:app:assembleDebug \
+  ./gradlew --init-script .github/zhuyindev.init.gradle :ime:app:assembleDebug \
       :addons:languages:chinese_traditional:apk:assembleDebug
   ```
 - The Traditional Chinese pack is not on the Play Store, so its default id

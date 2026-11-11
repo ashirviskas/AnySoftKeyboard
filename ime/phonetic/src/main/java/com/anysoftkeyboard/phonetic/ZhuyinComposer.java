@@ -92,7 +92,10 @@ public final class ZhuyinComposer implements ComposingEngine {
     final KeyLayout.Edit edit = mLayout.onKey(mPending, codePoint, mTable::isKnownSyllable);
     if (edit == null) return false;
     switch (edit.type) {
-      case SET -> mPending = edit.syllable;
+      case SET -> {
+        mPending = edit.syllable;
+        invalidate(); // the open syllable takes part in the conversion (see viewReadings)
+      }
       case CLOSE -> {
         mPending = edit.syllable;
         closePending();
@@ -125,6 +128,7 @@ public final class ZhuyinComposer implements ComposingEngine {
   public boolean onDelete() {
     if (!mPending.isEmpty()) {
       mPending = withoutLastVisibleSymbol(mPending);
+      invalidate();
       return true;
     }
     if (mReadings.isEmpty()) return false;
@@ -169,11 +173,16 @@ public final class ZhuyinComposer implements ComposingEngine {
       return;
     }
     final int anchor = anchor();
+    // Candidates may cover the open syllable (see viewReadings): close it, so the readings match
+    // the view the candidate came from.
+    if (hasProvisionalSyllable()) closePending();
     final Phrase phrase = candidate.phrase;
     if (anchor + phrase.span > mReadings.size()) return;
     mPins.removeIf(pin -> pin.start < anchor + phrase.span && anchor < pin.end());
     mPins.add(new Lattice.Node(anchor, phrase));
-    if (mLearning) mUserModel.learn(mReadings, anchor, phrase.span, phrase.text);
+    if (mLearning && candidate.kind != Candidate.Kind.RAW) {
+      mUserModel.learn(mReadings, anchor, phrase.span, phrase.text);
+    }
     if (mCursor < mReadings.size()) mCursor = anchor + phrase.span;
     invalidate();
     flushPinnedPrefix();
@@ -219,7 +228,7 @@ public final class ZhuyinComposer implements ComposingEngine {
   public String conversion() {
     final StringBuilder sb = new StringBuilder();
     for (Lattice.Node node : path()) sb.append(node.phrase.text);
-    if (!mPending.isEmpty()) sb.append(mPending);
+    if (!mPending.isEmpty() && !hasProvisionalSyllable()) sb.append(mPending);
     return sb.toString();
   }
 
@@ -262,7 +271,8 @@ public final class ZhuyinComposer implements ComposingEngine {
   @Override
   public List<Candidate> candidates() {
     final List<Candidate> candidates = new ArrayList<>();
-    if (mReadings.isEmpty()) return candidates;
+    final int size = viewReadings().size();
+    if (size == 0) return candidates;
     final int anchor = anchor();
     final Lattice lattice = lattice();
     final Set<String> seen = new HashSet<>();
@@ -273,14 +283,23 @@ public final class ZhuyinComposer implements ComposingEngine {
       candidates.add(new Candidate(sentence.toString(), Candidate.Kind.SENTENCE, null));
       seen.add(sentence.toString());
     }
-    for (int span = Math.min(PhraseTable.MAX_PHRASE_SYLLABLES, mReadings.size() - anchor);
-        span >= 1;
-        span--) {
+    for (int span = Math.min(PhraseTable.MAX_PHRASE_SYLLABLES, size - anchor); span >= 1; span--) {
       if (crossesPin(anchor, anchor + span)) continue;
       for (Phrase phrase : lattice.phrases(anchor, span)) {
         if (seen.add(phrase.text)) {
-          candidates.add(new Candidate(phrase.text, Candidate.Kind.PHRASE, phrase));
+          // A Bopomofo fallback (no phrase has this reading) is raw text, not a word to learn.
+          final Candidate.Kind kind =
+              phrase.score <= Lattice.FALLBACK_SCORE ? Candidate.Kind.RAW : Candidate.Kind.PHRASE;
+          candidates.add(new Candidate(phrase.text, kind, phrase));
         }
+      }
+    }
+    // Last: the syllable's own Bopomofo, so the symbols themselves can be typed (ㄅ, ㄋㄧˇ).
+    if (!crossesPin(anchor, anchor + 1)) {
+      final String raw = viewReadings().get(anchor).toString();
+      if (seen.add(raw)) {
+        candidates.add(
+            new Candidate(raw, Candidate.Kind.RAW, new Phrase(raw, 1, Lattice.FALLBACK_SCORE)));
       }
     }
     return candidates;
@@ -299,7 +318,7 @@ public final class ZhuyinComposer implements ComposingEngine {
   }
 
   private boolean crossesPin(int start, int end) {
-    for (Lattice.Node pin : mPins) {
+    for (Lattice.Node pin : viewPins()) {
       final boolean overlaps = start < pin.end() && pin.start < end;
       if (overlaps && !(pin.start == start && pin.end() == end)) return true;
     }
@@ -378,12 +397,43 @@ public final class ZhuyinComposer implements ComposingEngine {
   }
 
   private Lattice lattice() {
-    if (mLattice == null) mLattice = new Lattice(mReadings, mTable, mUserModel);
+    if (mLattice == null) mLattice = new Lattice(viewReadings(), mTable, mUserModel);
     return mLattice;
   }
 
   private List<Lattice.Node> path() {
-    if (mPath == null) mPath = lattice().bestPath(mPins);
+    if (mPath == null) mPath = lattice().bestPath(viewPins());
     return mPath;
+  }
+
+  /**
+   * True while a syllable is being typed. It is converted as if it were closed without a tone, so
+   * candidates show up without typing tones, while it stays open (ㄐㄧ can still become ㄐㄧㄚ). An
+   * incomplete one (a lone ㄅ) converts to its own Bopomofo.
+   */
+  private boolean hasProvisionalSyllable() {
+    return !mPending.isEmpty();
+  }
+
+  /** The readings the conversion works on: the closed ones plus a provisional open syllable. */
+  private List<Syllable> viewReadings() {
+    if (!hasProvisionalSyllable()) return mReadings;
+    final List<Syllable> view = new ArrayList<>(mReadings);
+    view.add(mCursor, mLayout.finish(mPending));
+    return view;
+  }
+
+  /** {@link #mPins} in {@link #viewReadings()} positions. */
+  private List<Lattice.Node> viewPins() {
+    if (!hasProvisionalSyllable()) return mPins;
+    final List<Lattice.Node> view = new ArrayList<>(mPins.size());
+    for (Lattice.Node pin : mPins) {
+      if (pin.end() <= mCursor) {
+        view.add(pin);
+      } else if (pin.start >= mCursor) {
+        view.add(new Lattice.Node(pin.start + 1, pin.phrase));
+      }
+    }
+    return view;
   }
 }

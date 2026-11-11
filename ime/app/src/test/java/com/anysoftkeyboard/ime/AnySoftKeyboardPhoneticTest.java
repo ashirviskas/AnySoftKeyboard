@@ -76,6 +76,16 @@ public class AnySoftKeyboardPhoneticTest extends AnySoftKeyboardBaseTest {
   }
 
   @Test
+  public void testTonelessSyllableShowsCandidates() {
+    type("ㄋㄧ");
+    Assert.assertEquals("ㄋㄧ", text());
+    final List<?> shown = verifyAndCaptureSuggestion(false);
+    Assert.assertTrue(shown.toString(), shown.contains("你"));
+    pick("你");
+    Assert.assertEquals("你", text());
+  }
+
+  @Test
   public void testPendingSyllableIsShownAsTyped() {
     type("ㄋㄧˇㄏㄠ");
     Assert.assertEquals("ㄋㄧˇㄏㄠ", text());

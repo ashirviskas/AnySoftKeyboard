@@ -23,6 +23,8 @@ public final class Candidate {
     SENTENCE,
     /** A phrase starting at the anchor. */
     PHRASE,
+    /** The anchor syllable's own Bopomofo, to type the symbols themselves. Not learned. */
+    RAW,
   }
 
   public final String text;
