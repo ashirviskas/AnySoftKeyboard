@@ -3,9 +3,9 @@
     Zhuyin (注音 / Bopomofo) layout: ㄅㄆㄇㄈ symbols are the primary key labels;
     long-press popups follow the Boshiamy convention: symbol-first, then the
     fullwidth Latin letter, then extra Bopomofo. Codes are Bopomofo Unicode
-    codepoints (U+3105..U+3129, plus tone marks U+02C7/02CA/02CB/02D9) so that
-    the radical buffer accumulates Bopomofo syllables which can then be looked
-    up in zhuyin_radicals.
+    codepoints (U+3105..U+3129, plus tone marks U+02C7/02CA/02CB/02D9), which
+    the Zhuyin composer (ime/phonetic) turns into syllables and converts to
+    Hanzi sentences.
 
     Mapping follows the standard 大千 (Dachen) Bopomofo keyboard layout.
     The top row is the row that on a US-QWERTY keyboard holds the digit row;
