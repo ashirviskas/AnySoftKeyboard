@@ -6,6 +6,10 @@
         android:title="@string/custom_layout_undo"
         app:showAsAction="always|withText" />
     <item
+        android:id="@+id/custom_layout_redo"
+        android:title="@string/custom_layout_redo"
+        app:showAsAction="ifRoom|withText" />
+    <item
         android:id="@+id/custom_layout_flip"
         android:icon="@drawable/ic_custom_layout_flip"
         android:title="@string/custom_layout_flip"

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One setting of the layout editor that is a number: its name, a slider, the value as text. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp">
+
+    <TextView
+        android:id="@+id/setting_name"
+        style="@style/CustomLayout.Text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="96dp" />
+
+    <SeekBar
+        android:id="@+id/setting_slider"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:progressTint="@color/custom_layout_line"
+        android:thumbTint="@color/custom_layout_accent" />
+
+    <TextView
+        android:id="@+id/setting_value"
+        style="@style/CustomLayout.Text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="end"
+        android:minWidth="56dp"
+        android:textColor="@color/custom_layout_accent" />
+</LinearLayout>

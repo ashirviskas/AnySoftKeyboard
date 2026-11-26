@@ -136,15 +136,18 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
 
         E temp = ((KeyboardAddOnViewHolder) viewHolder).mAddOn;
         // anything that is dragged, must be enabled
-        mEnabledAddOnsIds.add(temp.getId());
-        mFactory.setAddOnEnabled(temp.getId(), true);
+        if (!isShownAsEnabled(temp)) {
+          mEnabledAddOnsIds.add(temp.getId());
+          mFactory.setAddOnEnabled(temp.getId(), true);
+        }
         Collections.swap(mAllAddOns, from, to);
         recyclerView.getAdapter().notifyItemMoved(from, to);
         // making sure `to` is visible
         recyclerView.scrollToPosition(to);
 
         if (!mIsSingleSelection) {
-          ((AddOnsFactory.MultipleAddOnsFactory<E>) mFactory).setAddOnsOrder(mAllAddOns);
+          ((AddOnsFactory.MultipleAddOnsFactory<E>) mFactory)
+              .setAddOnsOrder(getOrderOfAllAddOns(mAllAddOns));
         }
 
         return true;
@@ -286,6 +289,15 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
   @NonNull
   protected List<E> getAddOnsToShow() {
     return mFactory.getAllAddOns();
+  }
+
+  /**
+   * The order of all add-ons that follows from the order of the {@code shown} ones, to be stored
+   * after a card was dragged. A subclass that shows a part of the add-ons says where the rest go.
+   */
+  @NonNull
+  protected List<E> getOrderOfAllAddOns(@NonNull List<E> shown) {
+    return shown;
   }
 
   /** Whether the card of {@code addOn} has the enabled mark. */

@@ -2,6 +2,7 @@ package com.anysoftkeyboard.ui.settings;
 
 import static androidx.test.core.app.ApplicationProvider.getApplicationContext;
 
+import android.content.DialogInterface;
 import android.graphics.Rect;
 import android.os.SystemClock;
 import android.view.MotionEvent;
@@ -10,6 +11,7 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.TextView;
+import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
 import com.anysoftkeyboard.RobolectricFragmentTestCase;
 import com.anysoftkeyboard.api.KeyCodes;
@@ -22,9 +24,13 @@ import com.anysoftkeyboard.rx.TestRxSchedulers;
 import com.google.android.material.tabs.TabLayout;
 import com.menny.android.anysoftkeyboard.AnyApplication;
 import com.menny.android.anysoftkeyboard.R;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.junit.Assert;
 import org.junit.Test;
 import org.robolectric.fakes.RoboMenuItem;
+import org.robolectric.shadows.ShadowDialog;
 
 public class CustomLayoutEditorFragmentTest
     extends RobolectricFragmentTestCase<KeyboardAddOnBrowserFragment> {
@@ -242,6 +248,270 @@ public class CustomLayoutEditorFragmentTest
   }
 
   @Test
+  public void testSeveralTypedCharactersBecomeSeveralKeys() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    tap(keyboard, 1, 2);
+    final int keys = layoutOf(keyboard).rows.get(1).keys.size();
+    // "any character…" is the last of the keyboard's keys
+    final ViewGroup chips = editor.requireView().findViewById(R.id.custom_layout_keyboard_keys);
+    chips.getChildAt(chips.getChildCount() - 1).performClick();
+    final AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+    // the lists to pick from: a title and its characters for each group, of several scripts
+    final ViewGroup lists = dialog.findViewById(R.id.custom_layout_characters_lists);
+    final String[] groups =
+        getApplicationContext()
+            .getResources()
+            .getStringArray(R.array.custom_layout_character_groups);
+    Assert.assertEquals(2 * groups.length, lists.getChildCount());
+    Assert.assertNotNull(lists.findViewWithTag((int) 'a'));
+    Assert.assertNotNull(lists.findViewWithTag((int) 'ų'));
+    Assert.assertNotNull(lists.findViewWithTag((int) 'λ'));
+    Assert.assertNotNull(lists.findViewWithTag((int) 'ж'));
+    ((EditText) dialog.findViewById(R.id.custom_layout_characters_typed)).setText("€£¥");
+    dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+    TestRxSchedulers.drainAllTasks();
+
+    // the first takes the place of the picked key, the others follow it
+    final CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    Assert.assertEquals(keys + 2, row.keys.size());
+    Assert.assertEquals('€', row.keys.get(2).code);
+    Assert.assertEquals('£', row.keys.get(3).code);
+    Assert.assertEquals('¥', row.keys.get(4).code);
+  }
+
+  @Test
+  public void testWithNothingPickedAKeyIsAddedToTheBottomRowThatIsShown() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    // the last row of the layout is for web addresses only; the keyboard shown is the text one
+    final int last = layoutOf(keyboard).rows.size() - 1;
+    for (int field : CustomLayout.FIELDS) {
+      layoutOf(keyboard).rows.get(last).setShownIn(field, field == Keyboard.KEYBOARD_ROW_MODE_URL);
+    }
+    final int keysOfLast = layoutOf(keyboard).rows.get(last).keys.size();
+    final int keysOfShown = layoutOf(keyboard).rows.get(last - 1).keys.size();
+    chipFor(editor, KeyCodes.UNDO).performClick();
+    Assert.assertEquals(keysOfLast, layoutOf(keyboard).rows.get(last).keys.size());
+    Assert.assertEquals(keysOfShown + 1, layoutOf(keyboard).rows.get(last - 1).keys.size());
+  }
+
+  @Test
+  public void testOrderAfterADragIsOfAllKeyboards() {
+    final KeyboardAddOnAndBuilder english = factory().getEnabledAddOn();
+    KeyboardAddOnBrowserFragment browser = startFragment();
+    browser.onEditAddOnClicked(english);
+    TestRxSchedulers.drainAllTasks();
+    select((CustomLayoutEditorFragment) getCurrentFragment(), R.id.custom_layout_save);
+    final KeyboardAddOnAndBuilder mine =
+        factory().getAddOnById(factory().getCustomLayouts().get(0).id);
+    final List<KeyboardAddOnAndBuilder> before = new ArrayList<>(factory().getAllAddOns());
+
+    // among the keyboards: the user's layout is not a card, and goes where the English card goes
+    browser = (KeyboardAddOnBrowserFragment) getCurrentFragment();
+    final List<KeyboardAddOnAndBuilder> cards = new ArrayList<>(browser.getAddOnsToShow());
+    Assert.assertFalse(cards.contains(mine));
+    Collections.reverse(cards);
+    List<KeyboardAddOnAndBuilder> order = browser.getOrderOfAllAddOns(cards);
+    Assert.assertEquals(before.size(), order.size());
+    Assert.assertEquals(cards.get(0), order.get(0));
+    Assert.assertEquals(order.indexOf(english) + 1, order.indexOf(mine));
+
+    // among the layouts of English: the two change places, the other keyboards stay
+    Assert.assertTrue(browser.onAddOnClicked(english));
+    TestRxSchedulers.drainAllTasks();
+    browser = (KeyboardAddOnBrowserFragment) getCurrentFragment();
+    final List<KeyboardAddOnAndBuilder> all = factory().getAllAddOns();
+    final List<KeyboardAddOnAndBuilder> layouts = new ArrayList<>(browser.getAddOnsToShow());
+    Assert.assertEquals(2, layouts.size());
+    Collections.reverse(layouts);
+    order = browser.getOrderOfAllAddOns(layouts);
+    Assert.assertEquals(all.size(), order.size());
+    for (int index = 0; index < all.size(); index++) {
+      final KeyboardAddOnAndBuilder was = all.get(index);
+      final int layout = layouts.indexOf(was);
+      Assert.assertEquals(layout < 0 ? was : layouts.get(1 - layout), order.get(index));
+    }
+  }
+
+  private static EditText keyValue(CustomLayoutEditorFragment editor, int line) {
+    // the lines of "This key" follow its divider and title
+    final ViewGroup values = editor.requireView().findViewById(R.id.custom_layout_key_values);
+    return values.getChildAt(2 + line).findViewById(R.id.setting_value);
+  }
+
+  @Test
+  public void testThePickedKeyShowsItsValuesAndTakesNewOnes() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final View values = editor.requireView().findViewById(R.id.custom_layout_key_values);
+    Assert.assertEquals(View.GONE, values.getVisibility());
+
+    final CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    final int q = indexOf(row, 'q');
+    tap(keyboard, 1, q);
+    Assert.assertEquals(View.VISIBLE, values.getVisibility());
+    // Types, With Shift, Label: as the keyboard has them
+    Assert.assertEquals("q", keyValue(editor, 0).getText().toString());
+    Assert.assertEquals("Q", keyValue(editor, 1).getText().toString());
+    Assert.assertEquals("q", keyValue(editor, 2).getText().toString());
+    Assert.assertFalse(row.keys.get(q).hasOwnValues());
+
+    keyValue(editor, 0).setText("quite");
+    keyValue(editor, 3).setText("qu");
+    Assert.assertEquals("quite", row.keys.get(q).text);
+    Assert.assertEquals("qu", row.keys.get(q).hint);
+    final Keyboard.Key shown = findKey(keyboard, 'q');
+    Assert.assertEquals("quite", shown.text.toString());
+    Assert.assertEquals("quite", shown.label.toString());
+
+    // the keyboard's own text again: the key follows the keyboard again
+    keyValue(editor, 0).setText("q");
+    Assert.assertNull(row.keys.get(q).text);
+    // another key shows its own values
+    tap(keyboard, 1, q + 1);
+    Assert.assertEquals("w", keyValue(editor, 0).getText().toString());
+    Assert.assertEquals("", keyValue(editor, 3).getText().toString());
+    // a gap has none
+    click(editor, R.id.custom_layout_insert_left);
+    Assert.assertEquals(View.GONE, values.getVisibility());
+  }
+
+  @Test
+  public void testAKeyCanBeDuplicatedWithItsValues() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    final int keys = row.keys.size();
+    tap(keyboard, 1, 2);
+    keyValue(editor, 2).setText("mine");
+    click(editor, R.id.custom_layout_duplicate_key);
+    Assert.assertEquals(keys + 1, row.keys.size());
+    Assert.assertEquals(row.keys.get(2).code, row.keys.get(3).code);
+    Assert.assertEquals("mine", row.keys.get(3).label);
+    Assert.assertEquals(3, keyboard.getSelectedKey());
+  }
+
+  @Test
+  public void testTheWidthOfAKeyCanBeLockedAndUnlocked() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    final TextView lock = editor.requireView().findViewById(R.id.custom_layout_lock_key);
+    Assert.assertEquals(View.GONE, lock.getVisibility());
+    tap(keyboard, 1, 2);
+    Assert.assertEquals("Lock width", lock.getText().toString());
+    final float width = row.keys.get(2).width;
+    lock.performClick();
+    Assert.assertTrue(row.keys.get(2).locked);
+    Assert.assertEquals("Unlock width", lock.getText().toString());
+    Assert.assertFalse(editor.requireView().findViewById(R.id.custom_layout_key_width).isEnabled());
+
+    // a key added to the row takes its room from the others
+    click(editor, R.id.custom_layout_insert_right);
+    Assert.assertEquals(width, row.keys.get(2).width, 0.01f);
+    // a key put in its place is locked too
+    tap(keyboard, 1, 2);
+    chipFor(editor, KeyCodes.UNDO).performClick();
+    Assert.assertEquals(KeyCodes.UNDO, row.keys.get(2).code);
+    Assert.assertTrue(row.keys.get(2).locked);
+
+    lock.performClick();
+    Assert.assertFalse(row.keys.get(2).locked);
+    Assert.assertTrue(editor.requireView().findViewById(R.id.custom_layout_key_width).isEnabled());
+  }
+
+  @Test
+  public void testSeveralPickedKeysAreResizedTogether() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    click(editor, R.id.custom_layout_pick_several);
+    tap(keyboard, 1, 0);
+    tap(keyboard, 1, 1);
+    Assert.assertEquals(2, keyboard.getSelectedKeys().size());
+    Assert.assertEquals(
+        View.VISIBLE,
+        editor.requireView().findViewById(R.id.custom_layout_edges_panel).getVisibility());
+    Assert.assertFalse(editor.requireView().findViewById(R.id.custom_layout_left_edge).isEnabled());
+
+    final EditText width = editor.requireView().findViewById(R.id.custom_layout_key_width_value);
+    width.setText("15");
+    width.onEditorAction(EditorInfo.IME_ACTION_DONE);
+    Assert.assertEquals(15f, row.keys.get(0).width, 0.05f);
+    Assert.assertEquals(15f, row.keys.get(1).width, 0.05f);
+    Assert.assertEquals(70f / 8, row.keys.get(2).width, 0.05f);
+    Assert.assertEquals(100f, row.totalWidth(), 0.05f);
+    // one step back for all of it
+    select(editor, R.id.custom_layout_undo);
+    Assert.assertEquals(10f, layoutOf(keyboard).rows.get(1).keys.get(0).width, 0.05f);
+  }
+
+  @Test
+  public void testATypedWidthGrowsTheKeyOnBothSidesOrOnTheSideLeftTicked() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    tap(keyboard, 1, 3);
+    final EditText width = editor.requireView().findViewById(R.id.custom_layout_key_width_value);
+    width.setText("20");
+    width.onEditorAction(EditorInfo.IME_ACTION_DONE);
+    Assert.assertEquals(20f, row.keys.get(3).width, 0.05f);
+    // the three keys before it and the six after it gave 5 each side
+    Assert.assertEquals(
+        25f, row.keys.get(0).width + row.keys.get(1).width + row.keys.get(2).width, 0.1f);
+    select(editor, R.id.custom_layout_undo);
+    Assert.assertEquals(10f, layoutOf(keyboard).rows.get(1).keys.get(3).width, 0.05f);
+
+    // the left edge stays: all of it comes from the right
+    tap(keyboard, 1, 3);
+    click(editor, R.id.custom_layout_width_moves_left);
+    width.setText("20");
+    width.onEditorAction(EditorInfo.IME_ACTION_DONE);
+    final CustomLayout.Row again = layoutOf(keyboard).rows.get(1);
+    Assert.assertEquals(20f, again.keys.get(3).width, 0.05f);
+    Assert.assertEquals(10f, again.keys.get(2).width, 0.05f);
+    // one of the two always moves
+    click(editor, R.id.custom_layout_width_moves_right);
+    Assert.assertTrue(
+        ((android.widget.CheckBox)
+                editor.requireView().findViewById(R.id.custom_layout_width_moves_left))
+            .isChecked());
+  }
+
+  @Test
+  public void testUndoneChangesCanBeDoneAgain() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final int keys = layoutOf(keyboard).rows.get(1).keys.size();
+    tap(keyboard, 1, 2);
+    click(editor, R.id.custom_layout_remove_key);
+    Assert.assertEquals(keys - 1, layoutOf(keyboard).rows.get(1).keys.size());
+    select(editor, R.id.custom_layout_undo);
+    Assert.assertEquals(keys, layoutOf(keyboard).rows.get(1).keys.size());
+    select(editor, R.id.custom_layout_redo);
+    Assert.assertEquals(keys - 1, layoutOf(keyboard).rows.get(1).keys.size());
+    select(editor, R.id.custom_layout_undo);
+    Assert.assertEquals(keys, layoutOf(keyboard).rows.get(1).keys.size());
+    // a new change leaves nothing to do again
+    tap(keyboard, 1, 3);
+    click(editor, R.id.custom_layout_split_key);
+    select(editor, R.id.custom_layout_redo);
+    Assert.assertEquals(keys + 1, layoutOf(keyboard).rows.get(1).keys.size());
+  }
+
+  @Test
+  public void testTheLayoutCanBeDuplicated() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    Assert.assertTrue(factory().getCustomLayouts().isEmpty());
+    click(editor, R.id.custom_layout_duplicate);
+    Assert.assertEquals(1, factory().getCustomLayouts().size());
+    final CustomLayout copy = factory().getCustomLayouts().get(0);
+    Assert.assertNotEquals(layoutOf(keyboardView(editor)).id, copy.id);
+    Assert.assertTrue(factory().isAddOnEnabled(copy.id));
+  }
+
+  @Test
   public void testSeveralKeysCanBePickedEvenedAndRemoved() {
     final CustomLayoutEditorFragment editor = openEditorForEnglish();
     final CustomLayoutEditorView keyboard = keyboardView(editor);
@@ -267,16 +537,46 @@ public class CustomLayoutEditorFragmentTest
     Assert.assertTrue(keyboard.getSelectedKeys().isEmpty());
   }
 
+  private static void dragRightEdge(CustomLayoutEditorView keyboard, int row, int key, int steps) {
+    final Rect slot = keyboard.getKeyboard().getCustomLayoutSlots()[row][key];
+    final float by = steps * keyboard.getKeyboard().getMinWidth() * CustomLayout.WIDTH_STEP / 100f;
+    touch(keyboard, MotionEvent.ACTION_DOWN, slot.right, slot.centerY());
+    touch(keyboard, MotionEvent.ACTION_MOVE, slot.right + by, slot.centerY());
+    touch(keyboard, MotionEvent.ACTION_UP, slot.right + by, slot.centerY());
+  }
+
   @Test
-  public void testResizingSharesTheRoomWithTheWholeSideToBeginWith() {
+  public void testResizingSharesTheRoomWithTheWholeSideInProportionToBeginWith() {
     final CustomLayoutEditorFragment editor = openEditorForEnglish();
     final CustomLayoutEditorView keyboard = keyboardView(editor);
+    // the bottom row: its keys differ in width (the space bar)
+    final int bottom = layoutOf(keyboard).rows.size() - 1;
+    final CustomLayout.Row row = layoutOf(keyboard).rows.get(bottom);
+    final float[] before = new float[row.keys.size()];
+    for (int index = 0; index < before.length; index++) before[index] = row.keys.get(index).width;
+    tap(keyboard, bottom, 0);
+    dragRightEdge(keyboard, bottom, 0, 1);
+    Assert.assertEquals(before[0] + CustomLayout.WIDTH_STEP, row.keys.get(0).width, 0.3f);
+    // every other key gave the same part of itself
+    final float factor = row.keys.get(1).width / before[1];
+    Assert.assertTrue(factor < 1);
+    for (int index = 1; index < before.length; index++) {
+      Assert.assertEquals(before[index] * factor, row.keys.get(index).width, 0.05f);
+    }
+    // and back: all as they were
+    dragRightEdge(keyboard, bottom, 0, -1);
+    for (int index = 0; index < before.length; index++) {
+      Assert.assertEquals(before[index], row.keys.get(index).width, 0.05f);
+    }
+  }
+
+  @Test
+  public void testResizingCanLeaveTheKeysOfTheSideEqual() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    click(editor, R.id.custom_layout_resize_keeps_proportions);
     tap(keyboard, 1, 0);
-    final Rect slot = keyboard.getKeyboard().getCustomLayoutSlots()[1][0];
-    final float step = keyboard.getKeyboard().getMinWidth() * CustomLayout.WIDTH_STEP / 100f;
-    touch(keyboard, MotionEvent.ACTION_DOWN, slot.right, slot.centerY());
-    touch(keyboard, MotionEvent.ACTION_MOVE, slot.right + step, slot.centerY());
-    touch(keyboard, MotionEvent.ACTION_UP, slot.right + step, slot.centerY());
+    dragRightEdge(keyboard, 1, 0, 1);
 
     final CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
     Assert.assertEquals(15f, row.keys.get(0).width, 0.3f);
@@ -575,9 +875,10 @@ public class CustomLayoutEditorFragmentTest
     width.setText("12.5");
     width.onEditorAction(EditorInfo.IME_ACTION_DONE);
     CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    // it grows on both sides: each neighbour gives half
     Assert.assertEquals(12.5f, row.keys.get(1).width, 0.06f);
-    Assert.assertEquals(7.5f, row.keys.get(2).width, 0.06f);
-    Assert.assertEquals(10f, row.keys.get(0).width, 0.06f);
+    Assert.assertEquals(8.75f, row.keys.get(2).width, 0.06f);
+    Assert.assertEquals(8.75f, row.keys.get(0).width, 0.06f);
 
     // the last key of a row grows to the left
     tap(keyboard, 1, 9);
@@ -647,6 +948,12 @@ public class CustomLayoutEditorFragmentTest
         .onEditAddOnClicked(factory().getAddOnById(stored.id));
     TestRxSchedulers.drainAllTasks();
     select((CustomLayoutEditorFragment) getCurrentFragment(), R.id.custom_layout_delete);
+    // deleting asks first
+    Assert.assertEquals(1, factory().getCustomLayouts().size());
+    ((AlertDialog) ShadowDialog.getLatestDialog())
+        .getButton(DialogInterface.BUTTON_POSITIVE)
+        .performClick();
+    TestRxSchedulers.drainAllTasks();
     Assert.assertTrue(factory().getCustomLayouts().isEmpty());
     Assert.assertFalse(factory().isAddOnEnabled(stored.id));
   }

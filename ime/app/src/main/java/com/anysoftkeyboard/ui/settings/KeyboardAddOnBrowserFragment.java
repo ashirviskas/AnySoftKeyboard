@@ -31,6 +31,7 @@ import com.anysoftkeyboard.keyboards.views.DemoAnyKeyboardView;
 import com.menny.android.anysoftkeyboard.AnyApplication;
 import com.menny.android.anysoftkeyboard.R;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import net.evendanan.pixel.UiUtils;
 
@@ -101,6 +102,30 @@ public class KeyboardAddOnBrowserFragment
       }
     }
     return keyboards;
+  }
+
+  /**
+   * Among the keyboards, the layouts of a keyboard go where its card goes. Among the layouts of one
+   * keyboard, they change places with each other and every other keyboard stays where it is.
+   */
+  @NonNull
+  @Override
+  protected List<KeyboardAddOnAndBuilder> getOrderOfAllAddOns(
+      @NonNull List<KeyboardAddOnAndBuilder> shown) {
+    final String group = getLayoutGroup();
+    final List<KeyboardAddOnAndBuilder> all = new ArrayList<>();
+    if (group == null) {
+      for (KeyboardAddOnAndBuilder keyboard : shown) {
+        all.addAll(getKeyboardFactory().getLayoutsOf(keyboard.getLayoutGroupId()));
+      }
+    } else {
+      final Iterator<KeyboardAddOnAndBuilder> layouts = shown.iterator();
+      for (KeyboardAddOnAndBuilder addOn : getKeyboardFactory().getAllAddOns()) {
+        all.add(
+            addOn.getLayoutGroupId().equals(group) && layouts.hasNext() ? layouts.next() : addOn);
+      }
+    }
+    return all;
   }
 
   /** Whether {@code addOn} is listed here for itself and its other layouts. */

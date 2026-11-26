@@ -56,6 +56,8 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
   private final TreeSet<Integer> mSelectedKeys = new TreeSet<>();
   private boolean mPickSeveral;
   private boolean mResizeEvensSide;
+  private boolean mResizeKeepsProportions;
+  private float mSnapStep = CustomLayout.WIDTH_STEP;
 
   private Gesture mGesture = Gesture.NONE;
   private int mGestureCount;
@@ -117,6 +119,17 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
     mResizeEvensSide = resizeEvensSide;
   }
 
+  /** While on, the keys of the side that is resized keep their proportions instead. */
+  public void setResizeKeepsProportions(boolean keepsProportions) {
+    mResizeKeepsProportions = keepsProportions;
+  }
+
+  /** What a dragged key edge settles on: multiples of {@code step} percent of the row. */
+  public void setSnapStep(float step) {
+    mSnapStep = step;
+    invalidate();
+  }
+
   /** Counts the touches so far; changes with the same count came from one drag. */
   public int getGestureCount() {
     return mGestureCount;
@@ -147,6 +160,15 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
   private CustomLayout layout() {
     final AnyKeyboard keyboard = getKeyboard();
     return keyboard == null ? null : keyboard.getCustomLayout();
+  }
+
+  /** Whether the width of the entry {@code key} of the picked row is locked: it has no handles. */
+  private boolean isLocked(int key) {
+    final CustomLayout layout = layout();
+    return layout != null
+        && mSelectedRow < layout.rows.size()
+        && key < layout.rows.get(mSelectedRow).keys.size()
+        && layout.rows.get(mSelectedRow).keys.get(key).locked;
   }
 
   private float keyboardX(MotionEvent event) {
@@ -217,7 +239,7 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
         mDownY = y;
         mGesture = Gesture.TAP;
         final int single = getSelectedKey();
-        if (mEditable && mGestureRow == mSelectedRow && single != NOTHING) {
+        if (mEditable && mGestureRow == mSelectedRow && single != NOTHING && !isLocked(single)) {
           // the edges of the picked key are handles, also from just outside the key
           final Rect picked = slots()[mSelectedRow][single];
           final float reach = 18 * mDensity;
@@ -240,8 +262,9 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
           final float position = x * row.totalWidth() / getKeyboard().getMinWidth();
           final boolean changed =
               mResizeEvensSide
-                  ? row.moveEdge(mTargetKey, position, mResizeAfter)
-                  : row.moveEdge(mTargetKey, position);
+                  ? row.moveEdge(
+                      mTargetKey, position, mResizeAfter, mSnapStep, mResizeKeepsProportions)
+                  : row.moveEdge(mTargetKey, position, mSnapStep);
           if (changed && mListener != null) mListener.onLayoutChanged();
         } else if (mGesture == Gesture.TAP
             && mEditable
@@ -298,6 +321,27 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
     }
   }
 
+  private void drawLock(Canvas canvas, Rect slot) {
+    final float left = slot.left + 3 * mDensity;
+    final float bottom = slot.bottom - 3 * mDensity;
+    final float width = 8 * mDensity;
+    final float bodyTop = bottom - 6 * mDensity;
+    mEditPaint.setStyle(Paint.Style.FILL);
+    canvas.drawRect(left, bodyTop, left + width, bottom, mEditPaint);
+    mEditPaint.setStyle(Paint.Style.STROKE);
+    mEditPaint.setStrokeWidth(1.5f * mDensity);
+    // the shackle: the upper half of an oval that stands on the body
+    canvas.drawArc(
+        left + 1.5f * mDensity,
+        bodyTop - 4 * mDensity,
+        left + width - 1.5f * mDensity,
+        bodyTop + 4 * mDensity,
+        180,
+        180,
+        false,
+        mEditPaint);
+  }
+
   @Override
   public void onDraw(Canvas canvas) {
     super.onDraw(canvas);
@@ -316,13 +360,21 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
     mEditPaint.setAlpha(140);
     for (int row = 0; row < slots.length; row++) {
       for (int key = 0; key < slots[row].length; key++) {
-        if (layout.rows.get(row).keys.get(key).code == CustomLayout.GAP) {
+        if (layout.rows.get(row).keys.get(key).isGap()) {
           canvas.drawRect(slots[row][key], mEditPaint);
         }
       }
     }
     mEditPaint.setPathEffect(null);
     mEditPaint.setAlpha(255);
+
+    // a small padlock in the corner of an entry whose width is locked
+    for (int row = 0; row < slots.length; row++) {
+      for (int key = 0; key < slots[row].length; key++) {
+        if (layout.rows.get(row).keys.get(key).locked) drawLock(canvas, slots[row][key]);
+      }
+    }
+    mEditPaint.setStyle(Paint.Style.STROKE);
 
     if (mSelectedRow >= 0 && mSelectedRow < slots.length && slots[mSelectedRow].length > 0) {
       final Rect[] row = slots[mSelectedRow];
@@ -336,11 +388,12 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
       } else {
         final Rect key = row[single];
         canvas.drawRect(key, mEditPaint);
-        if (mEditable) {
+        if (mEditable && !isLocked(single)) {
           // a ruler of width steps along the row, and a handle on each edge that can be dragged
           mEditPaint.setStrokeWidth(mDensity);
           final float width = getKeyboard().getMinWidth();
-          final int steps = Math.round(100 / CustomLayout.WIDTH_STEP);
+          // (no ruler without snapping: its marks would be a solid line)
+          final int steps = mSnapStep < 1 ? -1 : Math.round(100 / mSnapStep);
           for (int step = 0; step <= steps; step++) {
             final float tickX = width * step / steps;
             canvas.drawLine(tickX, key.top - 5 * mDensity, tickX, key.top, mEditPaint);

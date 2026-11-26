@@ -243,7 +243,7 @@ public class KeyboardAddOnAndBuilder extends AddOnImpl {
         layout.name,
         mResId,
         mLandscapeResId,
-        mDefaultDictionary,
+        layout.dictionary != null ? layout.dictionary : mDefaultDictionary,
         mIconResId,
         mQwertyTranslationId,
         mAdditionalIsLetterExceptions,

@@ -163,7 +163,17 @@ public abstract class AnyKeyboard extends Keyboard {
     return mCustomLayoutKeyChoices;
   }
 
-  private void applyCustomLayout(@NonNull CustomLayout layout, KeyboardDimens keyboardDimens) {
+  private void applyCustomLayout(@NonNull CustomLayout layout, KeyboardDimens themeDimens) {
+    final float density = mLocalContext.getResources().getDisplayMetrics().density;
+    final KeyboardDimens keyboardDimens =
+        new KeyboardDimensWithGaps(
+            themeDimens,
+            layout.keyGap == CustomLayout.THEME_GAP
+                ? themeDimens.getKeyHorizontalGap()
+                : layout.keyGap * density,
+            layout.rowGap == CustomLayout.THEME_GAP
+                ? themeDimens.getRowVerticalGap()
+                : layout.rowGap * density);
     final List<Key> available = new ArrayList<>(getKeys());
     final KeyboardExtension usualKeys =
         new KeyboardExtension(
@@ -911,14 +921,41 @@ public abstract class AnyKeyboard extends Keyboard {
       showKeyInLayout = other.showKeyInLayout;
     }
 
-    /** A plain key that types one character. */
+    /** A plain key that types one character; with code 0, what {@link #customize} gives it. */
     AnyKey(Row row, KeyboardDimens keyboardDimens, int code) {
       super(row, keyboardDimens);
-      mCodes = new int[] {code};
-      mShiftedCodes = new int[] {Character.toUpperCase(code)};
-      mShiftCodesAlways = Character.isLetter(code);
-      label = new String(Character.toChars(code));
+      if (code != 0) {
+        mCodes = new int[] {code};
+        mShiftedCodes = new int[] {Character.toUpperCase(code)};
+        mShiftCodesAlways = Character.isLetter(code);
+        label = new String(Character.toChars(code));
+      }
       mEnabled = true;
+    }
+
+    /** Puts on this key what the user set for it in a custom layout. */
+    void customize(@NonNull CustomLayout.Key entry) {
+      if (entry.text != null) {
+        text = shiftedText = entry.text;
+        typedText = shiftedTypedText = null;
+        // the label follows what the key types, unless it has one of its own (below)
+        label = entry.text;
+      }
+      if (entry.shifted != null) {
+        if (text != null) shiftedText = entry.shifted;
+        else mShiftedCodes = entry.shifted.codePoints().toArray();
+        shiftedKeyLabel = entry.shifted;
+        mShiftCodesAlways = true;
+      }
+      if (entry.label != null) label = entry.label;
+      if (entry.hint != null) hintLabel = entry.hint;
+      if (entry.popup != null) {
+        popupCharacters = entry.popup;
+        popupResId = entry.popup.isEmpty() ? 0 : R.xml.popup_one_row;
+        externalResourcePopupLayout = false;
+      }
+      if (entry.repeats != null) repeatable = entry.repeats;
+      if (entry.functional != null) mFunctionalKey = entry.functional;
     }
 
     public AnyKey(

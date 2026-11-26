@@ -161,6 +161,41 @@
                             android:selectAllOnFocus="true"
                             android:textColor="@color/custom_layout_accent" />
                     </LinearLayout>
+
+                    <!-- which edges of the key a new width moves: both, so it grows on both sides -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="36dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/CustomLayout.Text.Small"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="8dp"
+                            android:text="@string/custom_layout_width_moves" />
+
+                        <CheckBox
+                            android:id="@+id/custom_layout_width_moves_left"
+                            style="@style/CustomLayout.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:layout_marginEnd="12dp"
+                            android:buttonTint="@color/custom_layout_accent"
+                            android:checked="true"
+                            android:text="@string/custom_layout_width_moves_left" />
+
+                        <CheckBox
+                            android:id="@+id/custom_layout_width_moves_right"
+                            style="@style/CustomLayout.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:layout_marginEnd="12dp"
+                            android:buttonTint="@color/custom_layout_accent"
+                            android:checked="true"
+                            android:text="@string/custom_layout_width_moves_right" />
+                    </LinearLayout>
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="44dp"
@@ -277,11 +312,17 @@
                             android:text="@string/custom_layout_split_key" />
 
                         <TextView
-                            android:id="@+id/custom_layout_long_press"
+                            android:id="@+id/custom_layout_lock_key"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+
+                        <TextView
+                            android:id="@+id/custom_layout_duplicate_key"
                             style="@style/CustomLayout.Link"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/custom_layout_long_press" />
+                            android:text="@string/custom_layout_duplicate_key" />
 
                         <TextView
                             android:id="@+id/custom_layout_remove_key"
@@ -290,6 +331,22 @@
                             android:layout_height="wrap_content" />
                     </LinearLayout>
                 </HorizontalScrollView>
+
+                <!-- what the picked key has of its own: filled by the editor, one line per value -->
+                <LinearLayout
+                    android:id="@+id/custom_layout_key_values"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <View style="@style/CustomLayout.Divider" />
+
+                    <TextView
+                        style="@style/CustomLayout.Text.Section"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/custom_layout_key_values" />
+                </LinearLayout>
 
                 <View style="@style/CustomLayout.Divider" />
 
@@ -311,6 +368,15 @@
                     android:layout_marginHorizontal="10dp"
                     android:buttonTint="@color/custom_layout_accent"
                     android:text="@string/custom_layout_resize_evens_side" />
+
+                <CheckBox
+                    android:id="@+id/custom_layout_resize_keeps_proportions"
+                    style="@style/CustomLayout.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:buttonTint="@color/custom_layout_accent"
+                    android:text="@string/custom_layout_resize_keeps_proportions" />
 
                 <View style="@style/CustomLayout.Divider" />
 
@@ -405,38 +471,22 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
 
+                <!-- the gap at each side of the row: filled by the editor -->
                 <LinearLayout
-                    android:id="@+id/custom_layout_side_gaps_panel"
+                    android:id="@+id/custom_layout_side_gaps"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="16dp">
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
 
-                    <TextView
-                        style="@style/CustomLayout.Text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/custom_layout_side_gaps" />
-
-                    <SeekBar
-                        android:id="@+id/custom_layout_side_gaps"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:progressTint="@color/custom_layout_line"
-                        android:thumbTint="@color/custom_layout_accent" />
-
-                    <TextView
-                        android:id="@+id/custom_layout_side_gaps_value"
-                        style="@style/CustomLayout.Text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-medium"
-                        android:gravity="end"
-                        android:minWidth="44dp"
-                        android:textColor="@color/custom_layout_accent" />
-                </LinearLayout>
+                <CheckBox
+                    android:id="@+id/custom_layout_same_side_gaps"
+                    style="@style/CustomLayout.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:buttonTint="@color/custom_layout_accent"
+                    android:checked="true"
+                    android:text="@string/custom_layout_same_side_gaps" />
 
                 <View style="@style/CustomLayout.Divider" />
 
@@ -580,6 +630,80 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
 
+                <View style="@style/CustomLayout.Divider" />
+
+                <TextView
+                    style="@style/CustomLayout.Text.Section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/custom_layout_spacing" />
+
+                <!-- the gaps between keys and rows: filled by the editor -->
+                <LinearLayout
+                    android:id="@+id/custom_layout_spacing"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/custom_layout_theme_spacing"
+                    style="@style/CustomLayout.Link"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/custom_layout_theme_spacing" />
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <TextView
+                    style="@style/CustomLayout.Text.Section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/custom_layout_dictionary" />
+
+                <TextView
+                    android:id="@+id/custom_layout_dictionary"
+                    style="@style/CustomLayout.Link"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp" />
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <TextView
+                    style="@style/CustomLayout.Text.Section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/custom_layout_snap" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/custom_layout_snap"
+                    app:chipSpacingHorizontal="6dp"
+                    app:chipSpacingVertical="6dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp" />
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <TextView
+                    style="@style/CustomLayout.Text.Section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/custom_layout_checks" />
+
+                <TextView
+                    android:id="@+id/custom_layout_checks"
+                    style="@style/CustomLayout.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:lineSpacingMultiplier="1.3"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp" />
+
+                <View style="@style/CustomLayout.Divider" />
+
                 <HorizontalScrollView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -619,6 +743,13 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/custom_layout_import" />
+
+                        <TextView
+                            android:id="@+id/custom_layout_duplicate"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_duplicate" />
 
                         <TextView
                             android:id="@+id/custom_layout_reset"

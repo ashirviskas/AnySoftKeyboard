@@ -11,6 +11,7 @@ import com.menny.android.anysoftkeyboard.AnyApplication;
 import java.util.ArrayList;
 import java.util.List;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Before;
@@ -180,18 +181,98 @@ public class CustomLayoutTest {
   @Test
   public void testSideGaps() {
     final CustomLayout.Row row = row(25, 25, 25, 25);
-    Assert.assertEquals(0f, row.getSideGaps(), 0f);
-    row.setSideGaps(10);
+    Assert.assertEquals(0f, row.getSideGap(true), 0f);
+    row.setSideGaps(10, 10);
     Assert.assertEquals(6, row.keys.size());
-    Assert.assertEquals(10f, row.getSideGaps(), 0.01f);
+    Assert.assertEquals(10f, row.getSideGap(true), 0.01f);
+    Assert.assertEquals(10f, row.getSideGap(false), 0.01f);
     Assert.assertEquals(20f, row.keys.get(1).width, 0.01f);
     Assert.assertEquals(100f, row.totalWidth(), 0.01f);
-    row.setSideGaps(5);
-    Assert.assertEquals(6, row.keys.size());
-    Assert.assertEquals(22.5f, row.keys.get(1).width, 0.01f);
-    row.setSideGaps(0);
+    // each side by itself
+    row.setSideGaps(0, 20);
+    Assert.assertEquals(5, row.keys.size());
+    Assert.assertEquals(0f, row.getSideGap(true), 0f);
+    Assert.assertEquals(20f, row.getSideGap(false), 0.01f);
+    Assert.assertEquals(20f, row.keys.get(0).width, 0.01f);
+    row.setSideGaps(0, 0);
     Assert.assertEquals(4, row.keys.size());
     Assert.assertEquals(25f, row.keys.get(0).width, 0.01f);
+  }
+
+  @Test
+  public void testAKeyTakesTheValuesTheUserSetForIt() throws Exception {
+    final CustomLayout layout = captureEnglish();
+    final Keyboard.Key plainQ = findKey(load(mEnglish), 'q');
+    CustomLayout.Key q = null;
+    CustomLayout.Key w = null;
+    for (CustomLayout.Row row : layout.rows) {
+      for (CustomLayout.Key key : row.keys) {
+        if (key.code == 'q') q = key;
+        if (key.code == 'w') w = key;
+      }
+    }
+    q.text = "quick brown";
+    q.hint = "qb";
+    q.repeats = true;
+    q.functional = true;
+    w.shifted = "!";
+    w.label = "W!";
+
+    // as stored and read again
+    final CustomLayout read = CustomLayout.fromJson(new JSONObject(layout.toJson().toString()));
+    final AnyKeyboard custom = load(mEnglish.withLayout(read, 0));
+    final AnyKeyboard.AnyKey qKey = (AnyKeyboard.AnyKey) findKey(custom, 'q');
+    Assert.assertEquals("quick brown", qKey.text.toString());
+    Assert.assertEquals("the label follows the text", "quick brown", qKey.label.toString());
+    Assert.assertEquals("qb", qKey.hintLabel.toString());
+    Assert.assertTrue(qKey.repeatable);
+    Assert.assertTrue(qKey.isFunctional());
+    Assert.assertFalse(plainQ.repeatable);
+    final Keyboard.Key wKey = findKey(custom, 'w');
+    Assert.assertEquals("W!", wKey.label.toString());
+    Assert.assertEquals('!', wKey.getCodeAtIndex(0, true));
+    Assert.assertEquals('w', wKey.getCodeAtIndex(0, false));
+    // a key the user left alone is as the keyboard made it
+    Assert.assertNull(findKey(custom, 'e').text);
+  }
+
+  @Test
+  public void testAKeyThatOnlyTypesATextIsNotAGap() throws Exception {
+    final CustomLayout layout = captureEnglish();
+    final CustomLayout.Key snippet = new CustomLayout.Key(CustomLayout.GAP, 10);
+    snippet.text = "kind regards";
+    Assert.assertFalse(snippet.isGap());
+    layout.rows.get(1).add(0, snippet);
+    final CustomLayout read = CustomLayout.fromJson(new JSONObject(layout.toJson().toString()));
+    final AnyKeyboard custom = load(mEnglish.withLayout(read, 0));
+    Keyboard.Key found = null;
+    for (Keyboard.Key key : custom.getKeys()) {
+      if (key.text != null && "kind regards".contentEquals(key.text)) found = key;
+    }
+    Assert.assertNotNull(found);
+    Assert.assertEquals(0, found.getCodesCount());
+    Assert.assertEquals(custom.getCustomLayoutSlots()[1][0].left, found.x);
+  }
+
+  @Test
+  public void testALayoutCanHaveItsOwnGapsAndDictionary() throws Exception {
+    final CustomLayout layout = captureEnglish();
+    final AnyKeyboard themed = load(mEnglish.withLayout(layout, 0));
+    layout.keyGap = 12;
+    layout.rowGap = 0;
+    layout.dictionary = "lt";
+    final CustomLayout read = CustomLayout.fromJson(new JSONObject(layout.toJson().toString()));
+    Assert.assertEquals(12f, read.keyGap, 0f);
+    Assert.assertEquals(0f, read.rowGap, 0f);
+    final AnyKeyboard custom = load(mEnglish.withLayout(read, 0));
+    Assert.assertEquals("lt", custom.getDefaultDictionaryLocale());
+    Assert.assertTrue(findKey(custom, 'q').width < findKey(themed, 'q').width);
+    Assert.assertTrue(custom.getHeight() < themed.getHeight());
+    // a layout that says nothing has the theme's gaps and the keyboard's dictionary
+    Assert.assertEquals(CustomLayout.THEME_GAP, captureEnglish().keyGap, 0f);
+    Assert.assertEquals(
+        mEnglish.createKeyboard(1).getDefaultDictionaryLocale(),
+        themed.getDefaultDictionaryLocale());
   }
 
   @Test
@@ -290,6 +371,13 @@ public class CustomLayoutTest {
   }
 
   @Test
+  public void testLongPressCharactersInTheFirstStoredFormAreRead() throws Exception {
+    final JSONObject json = captureEnglish().toJson();
+    json.getJSONArray("rows").getJSONObject(1).getJSONArray("keys").getJSONArray(0).put(2, "åä");
+    Assert.assertEquals("åä", CustomLayout.fromJson(json).rows.get(1).keys.get(0).popup);
+  }
+
+  @Test
   public void testAddTakesRoomFromTheStretchKey() {
     final CustomLayout.Row row = row(10, 10, 50, 15, 15);
     row.add(1, new CustomLayout.Key('x', 10));
@@ -322,6 +410,85 @@ public class CustomLayoutTest {
     final CustomLayout.Row row = new CustomLayout.Row();
     row.add(0, new CustomLayout.Key('x', 10));
     Assert.assertEquals(100f, row.totalWidth(), 0.01f);
+  }
+
+  @Test
+  public void testAddedKeyTakesHalfOfTheRowAtMost() {
+    // as when the only key of another row is dragged in
+    final CustomLayout.Row row = row(25, 25, 25, 25);
+    row.add(0, new CustomLayout.Key('x', 100));
+    Assert.assertEquals(100f, row.totalWidth(), 0.01f);
+    Assert.assertEquals(50f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(12.5f, row.keys.get(1).width, 0.01f);
+  }
+
+  @Test
+  public void testSizesThatWereReadAreChecked() throws Exception {
+    final String json = captureEnglish().toJson().toString();
+    final JSONObject tall = new JSONObject(json);
+    tall.getJSONArray("rows").getJSONObject(0).put("height", 100);
+    Assert.assertEquals(
+        CustomLayout.MAX_ROW_HEIGHT, CustomLayout.fromJson(tall).rows.get(0).height, 0f);
+
+    final JSONObject noWidth = new JSONObject(json);
+    noWidth.getJSONArray("rows").getJSONObject(0).getJSONArray("keys").getJSONArray(0).put(1, 0);
+    Assert.assertThrows(JSONException.class, () -> CustomLayout.fromJson(noWidth));
+
+    final JSONObject noKeys = new JSONObject(json);
+    noKeys.getJSONArray("rows").getJSONObject(0).put("keys", new JSONArray());
+    Assert.assertThrows(JSONException.class, () -> CustomLayout.fromJson(noKeys));
+  }
+
+  @Test
+  public void testAStoredLayoutThatCannotBeReadDoesNotHideTheOthers() throws Exception {
+    final JSONArray stored =
+        new JSONArray().put(new JSONObject().put("id", "broken")).put(captureEnglish().toJson());
+    DirectBootAwareSharedPreferences.create(getApplicationContext())
+        .edit()
+        .putString("keyboard_custom_layouts", stored.toString())
+        .commit();
+    TestRxSchedulers.drainAllTasks();
+    Assert.assertEquals(1, mFactory.getCustomLayouts().size());
+    Assert.assertNotNull(mFactory.getAddOnById("layout-test"));
+  }
+
+  @Test
+  public void testALockedKeyKeepsItsWidth() throws Exception {
+    final CustomLayout.Row row = row(25, 25, 25, 25);
+    row.keys.get(0).locked = true;
+    // keys added and removed
+    row.add(4, new CustomLayout.Key('x', 15));
+    Assert.assertEquals(25f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(20f, row.keys.get(1).width, 0.01f);
+    Assert.assertEquals(100f, row.totalWidth(), 0.01f);
+    row.remove(4);
+    Assert.assertEquals(25f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(25f, row.keys.get(1).width, 0.01f);
+    // side gaps
+    row.setSideGaps(7.5f, 7.5f);
+    Assert.assertEquals(25f, row.keys.get(1).width, 0.01f);
+    Assert.assertEquals(20f, row.keys.get(2).width, 0.01f);
+    row.setSideGaps(0, 0);
+    // its own edges, alone or with the whole side
+    Assert.assertFalse(row.moveEdge(0, 40));
+    Assert.assertFalse(row.moveEdge(0, 40, true));
+    // a neighbour's resize that shares with the side leaves it out
+    Assert.assertTrue(row.moveEdge(1, 40, false));
+    Assert.assertEquals(25f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(15f, row.keys.get(1).width, 0.01f);
+    Assert.assertEquals(35f, row.keys.get(2).width, 0.01f);
+    // even widths
+    row.evenWidths();
+    Assert.assertEquals(25f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(25f, row.keys.get(1).width, 0.01f);
+
+    // the lock is stored, and copied with the key
+    final CustomLayout layout = new CustomLayout("layout-test", "Mine", "base");
+    layout.rows.add(row);
+    final CustomLayout read = CustomLayout.fromJson(new JSONObject(layout.toJson().toString()));
+    Assert.assertTrue(read.rows.get(0).keys.get(0).locked);
+    Assert.assertFalse(read.rows.get(0).keys.get(1).locked);
+    Assert.assertTrue(row.keys.get(0).copy(10).locked);
   }
 
   @Test
@@ -388,6 +555,50 @@ public class CustomLayoutTest {
     Assert.assertEquals(CustomLayout.WIDTH_STEP, row.keys.get(3).width, 0.01f);
     Assert.assertTrue(row.moveEdge(0, 0f, true));
     Assert.assertEquals(CustomLayout.WIDTH_STEP, row.keys.get(0).width, 0.01f);
+  }
+
+  @Test
+  public void testMoveEdgeKeepingTheProportionsOfTheSide() {
+    final CustomLayout.Row row = row(10, 10, 50, 15, 15);
+    Assert.assertTrue(row.moveEdge(0, 20, true, CustomLayout.WIDTH_STEP, true));
+    Assert.assertEquals(20f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(10f * 80 / 90, row.keys.get(1).width, 0.01f);
+    Assert.assertEquals(50f * 80 / 90, row.keys.get(2).width, 0.01f);
+    Assert.assertEquals(100f, row.totalWidth(), 0.01f);
+    // back again: every key as it was
+    Assert.assertTrue(row.moveEdge(0, 10, true, CustomLayout.WIDTH_STEP, true));
+    Assert.assertEquals(10f, row.keys.get(1).width, 0.01f);
+    Assert.assertEquals(50f, row.keys.get(2).width, 0.01f);
+    Assert.assertEquals(15f, row.keys.get(4).width, 0.01f);
+    // the narrowest key of the side stops at one step
+    row.moveEdge(0, 95, true, CustomLayout.WIDTH_STEP, true);
+    Assert.assertEquals(CustomLayout.WIDTH_STEP, row.keys.get(1).width, 0.01f);
+    Assert.assertEquals(25f, row.keys.get(2).width, 0.01f);
+    Assert.assertEquals(100f, row.totalWidth(), 0.01f);
+  }
+
+  @Test
+  public void testSeveralKeysCanBeGivenAWidthTogether() {
+    final CustomLayout.Row row = row(10, 10, 50, 15, 15);
+    Assert.assertTrue(row.setWidths(java.util.Arrays.asList(0, 1), 15));
+    Assert.assertEquals(15f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(15f, row.keys.get(1).width, 0.01f);
+    // the others keep their proportions
+    Assert.assertEquals(50f * 70 / 80, row.keys.get(2).width, 0.01f);
+    Assert.assertEquals(15f * 70 / 80, row.keys.get(3).width, 0.01f);
+    Assert.assertEquals(100f, row.totalWidth(), 0.01f);
+    // back: all as they were
+    Assert.assertTrue(row.setWidths(java.util.Arrays.asList(0, 1), 10));
+    Assert.assertEquals(50f, row.keys.get(2).width, 0.01f);
+    Assert.assertEquals(15f, row.keys.get(4).width, 0.01f);
+    Assert.assertFalse(row.setWidths(java.util.Arrays.asList(0, 1), 10));
+    // no wider than the others allow, and a locked key is left out of it all
+    row.keys.get(2).locked = true;
+    row.setWidths(java.util.Arrays.asList(0, 1), 90);
+    Assert.assertEquals(50f, row.keys.get(2).width, 0.01f);
+    Assert.assertEquals(CustomLayout.WIDTH_STEP, row.keys.get(3).width, 0.01f);
+    Assert.assertEquals(20f, row.keys.get(0).width, 0.01f);
+    Assert.assertEquals(100f, row.totalWidth(), 0.01f);
   }
 
   @Test
@@ -464,7 +675,9 @@ public class CustomLayoutTest {
   @Test
   public void testLayoutOfMissingKeyboardIsKeptAndNotOffered() {
     final int keyboardsBefore = mFactory.getAllAddOns().size();
-    mFactory.saveCustomLayout(new CustomLayout("layout-orphan", "Orphan", "no-such-keyboard"));
+    final CustomLayout orphan = new CustomLayout("layout-orphan", "Orphan", "no-such-keyboard");
+    orphan.rows.add(row(50, 50));
+    mFactory.saveCustomLayout(orphan);
     Assert.assertEquals(keyboardsBefore, mFactory.getAllAddOns().size());
     Assert.assertNull(mFactory.getAddOnById("layout-orphan"));
     Assert.assertNotNull(mFactory.getCustomLayout("layout-orphan"));

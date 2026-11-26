@@ -188,7 +188,12 @@ public class KeyboardFactory extends AddOnsFactory.MultipleAddOnsFactory<Keyboar
     try {
       final JSONArray json = new JSONArray(mSharedPreferences.getString(CUSTOM_LAYOUTS_PREF, "[]"));
       for (int i = 0; i < json.length(); i++) {
-        layouts.add(CustomLayout.fromJson(json.getJSONObject(i)));
+        // one layout that cannot be read does not take the others with it
+        try {
+          layouts.add(CustomLayout.fromJson(json.getJSONObject(i)));
+        } catch (JSONException e) {
+          Logger.w(TAG, e, "Failed to read custom layout %d.", i);
+        }
       }
     } catch (JSONException e) {
       Logger.w(TAG, e, "Failed to read the custom layouts.");

@@ -4,7 +4,6 @@ import android.graphics.Rect;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.anysoftkeyboard.keyboards.AnyKeyboard.AnyKey;
-import com.menny.android.anysoftkeyboard.R;
 import java.util.Iterator;
 import java.util.List;
 
@@ -12,7 +11,8 @@ import java.util.List;
  * Places keys the way a {@link CustomLayout} says. The keys themselves are not built here: each
  * entry of the layout takes the loaded key that has its code, so a key keeps what its keyboard gave
  * it (label, popup, shifted codes). An entry whose key was taken already gets a copy of it, and a
- * character no loaded key has becomes a plain key.
+ * character or text no loaded key has becomes a plain key. What the entry has of its own (see
+ * {@link CustomLayout.Key}) is then put on the key.
  */
 final class KeyboardLayoutArranger {
   private KeyboardLayoutArranger() {}
@@ -71,14 +71,11 @@ final class KeyboardLayoutArranger {
         final int code = becomesAddressKey ? addressKey : entry.code;
         if (becomesAddressKey) addressKey = 0;
 
-        final Keyboard.Key key = take(available, placed, code, plainKeysRow, dimens);
+        final Keyboard.Key key =
+            entry.isGap() ? null : take(available, placed, code, entry.text, plainKeysRow, dimens);
         if (key == null) continue;
         key.setBounds(slot.left, slot.top, slot.width(), slot.height());
-        if (entry.popup != null && !becomesAddressKey) {
-          key.popupCharacters = entry.popup;
-          key.popupResId = entry.popup.isEmpty() ? 0 : R.xml.popup_one_row;
-          key.externalResourcePopupLayout = false;
-        }
+        if (!becomesAddressKey && key instanceof AnyKey) ((AnyKey) key).customize(entry);
         placed.add(key);
       }
       y += height + dimens.getRowVerticalGap();
@@ -101,27 +98,35 @@ final class KeyboardLayoutArranger {
     return code > ' ' && !Character.isLetterOrDigit(code);
   }
 
-  /** Null for a gap, and for a function key that no loaded keyboard has (anymore). */
+  /**
+   * The key for {@code code}; a key without a code (0) is known by the {@code text} it types. Null
+   * for a function key that no loaded keyboard has (anymore).
+   */
   @Nullable
   private static Keyboard.Key take(
       List<Keyboard.Key> available,
       List<Keyboard.Key> placed,
       int code,
+      @Nullable String text,
       Keyboard.Row plainKeysRow,
       KeyboardDimens dimens) {
-    if (code == CustomLayout.GAP) return null;
     for (Iterator<Keyboard.Key> iterator = available.iterator(); iterator.hasNext(); ) {
       final Keyboard.Key key = iterator.next();
-      if (key.getPrimaryCode() == code) {
+      if (isKeyFor(key, code, text)) {
         iterator.remove();
         return key;
       }
     }
     for (Keyboard.Key key : placed) {
-      if (key.getPrimaryCode() == code && key instanceof AnyKey) {
+      if (isKeyFor(key, code, text) && key instanceof AnyKey) {
         return new AnyKey((AnyKey) key, plainKeysRow, dimens);
       }
     }
-    return code > 0 ? new AnyKey(plainKeysRow, dimens, code) : null;
+    return code >= 0 ? new AnyKey(plainKeysRow, dimens, code) : null;
+  }
+
+  private static boolean isKeyFor(Keyboard.Key key, int code, @Nullable String text) {
+    return key.getPrimaryCode() == code
+        && (code != CustomLayout.GAP || (key.text != null && key.text.toString().equals(text)));
   }
 }

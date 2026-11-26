@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One value of a key in the layout editor that is a text: its name and the text. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp">
+
+    <TextView
+        android:id="@+id/setting_name"
+        style="@style/CustomLayout.Text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1" />
+
+    <EditText
+        android:id="@+id/setting_value"
+        style="@style/CustomLayout.Text"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:layout_weight="1"
+        android:background="@drawable/custom_layout_value_box"
+        android:fontFamily="sans-serif-medium"
+        android:imeOptions="actionDone"
+        android:importantForAutofill="no"
+        android:inputType="textNoSuggestions"
+        android:maxLines="1"
+        android:paddingHorizontal="10dp"
+        android:textColor="@color/custom_layout_accent" />
+</LinearLayout>
