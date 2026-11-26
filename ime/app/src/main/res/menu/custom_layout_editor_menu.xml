@@ -6,6 +6,11 @@
         android:title="@string/custom_layout_undo"
         app:showAsAction="always|withText" />
     <item
+        android:id="@+id/custom_layout_flip"
+        android:icon="@drawable/ic_custom_layout_flip"
+        android:title="@string/custom_layout_flip"
+        app:showAsAction="always" />
+    <item
         android:id="@+id/custom_layout_save"
         android:icon="@drawable/ic_accept"
         android:title="@string/custom_layout_save"
@@ -13,26 +18,6 @@
     <item
         android:id="@+id/custom_layout_share_bottom_row"
         android:title="@string/custom_layout_share_bottom_row"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/custom_layout_copy"
-        android:title="@string/custom_layout_copy"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/custom_layout_paste"
-        android:title="@string/custom_layout_paste"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/custom_layout_export"
-        android:title="@string/custom_layout_export"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/custom_layout_import"
-        android:title="@string/custom_layout_import"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/custom_layout_reset"
-        android:title="@string/custom_layout_reset"
         app:showAsAction="never" />
     <item
         android:id="@+id/custom_layout_delete"

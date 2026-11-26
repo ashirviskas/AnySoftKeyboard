@@ -86,6 +86,16 @@ public final class CustomLayout {
       keys.add(index, key);
     }
 
+    /**
+     * Halves the entry at {@code index} and puts a gap into the half that became free, after it.
+     * The gap is the place for another key.
+     */
+    public void split(int index) {
+      final Key key = keys.get(index);
+      key.width /= 2;
+      keys.add(index + 1, new Key(GAP, key.width));
+    }
+
     /** Removes a key; its width goes to the row's stretch key, otherwise to all keys. */
     @NonNull
     public Key remove(int index) {

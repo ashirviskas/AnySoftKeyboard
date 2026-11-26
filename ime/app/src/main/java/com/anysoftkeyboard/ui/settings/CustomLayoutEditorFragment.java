@@ -3,6 +3,7 @@ package com.anysoftkeyboard.ui.settings;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.ContextThemeWrapper;
@@ -28,6 +29,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.Navigation;
+import androidx.preference.PreferenceManager;
 import com.anysoftkeyboard.api.KeyCodes;
 import com.anysoftkeyboard.keyboards.AnyKeyboard;
 import com.anysoftkeyboard.keyboards.CustomLayout;
@@ -65,8 +67,13 @@ public class CustomLayoutEditorFragment extends Fragment
   private static final String ARG_KEYBOARD_ID = "keyboard_id";
   private static final String STATE_LAYOUT = "layout";
 
-  private static final int TAB_KEYS = 0;
-  private static final int TAB_SIZE = 1;
+  private static final int TAB_KEY = 0;
+  private static final int TAB_ROW = 1;
+  private static final int TAB_KEYBOARD = 2;
+
+  /** Whether the keyboard is shown under the controls instead of over them; kept for the app. */
+  private static final String PREF_PREVIEW_AT_BOTTOM = "custom_layout_editor_keyboard_at_bottom";
+
   // the edges of the picked key, in percent of the row: by slider, and typed
   private static final float EDGE_SLIDER_STEP = 0.5f;
   private static final float EDGE_TYPED_STEP = 0.1f;
@@ -104,8 +111,14 @@ public class CustomLayoutEditorFragment extends Fragment
   private SeekBar mSideGaps;
   private SeekBar mLeftEdge;
   private SeekBar mRightEdge;
+  private SeekBar mKeyWidth;
   private LinearLayout mSizeRows;
-  private int mSizeSelection = ALL_LETTER_ROWS;
+  private LinearLayout mRowHeight;
+
+  // the tab that is shown, and what was picked when the Key and Row tabs were left, to come back to
+  private int mShownTab = TAB_KEY;
+  private int mRememberedRow = CustomLayoutEditorView.NOTHING;
+  private int mRememberedKey = CustomLayoutEditorView.NOTHING;
 
   // what the layout was before each change, newest first
   private final ArrayDeque<String> mUndo = new ArrayDeque<>();
@@ -139,6 +152,7 @@ public class CustomLayoutEditorFragment extends Fragment
     mNameView = view.findViewById(R.id.custom_layout_name);
     mSelectionView = view.findViewById(R.id.custom_layout_selection);
     mSizeRows = view.findViewById(R.id.custom_layout_size_rows);
+    mRowHeight = view.findViewById(R.id.custom_layout_row_height);
     mKeyboardView = view.findViewById(R.id.custom_layout_keyboard);
     mKeyboardView.setListener(this);
     mSelectionHintView = view.findViewById(R.id.custom_layout_selection_hint);
@@ -168,6 +182,7 @@ public class CustomLayoutEditorFragment extends Fragment
     view.findViewById(R.id.custom_layout_add_row).setOnClickListener(v -> addRow(false));
     view.findViewById(R.id.custom_layout_add_row_above).setOnClickListener(v -> addRow(true));
     view.findViewById(R.id.custom_layout_even_row).setOnClickListener(v -> evenSelectedRow());
+    view.findViewById(R.id.custom_layout_even_keys).setOnClickListener(v -> evenSelectedRow());
     view.findViewById(R.id.custom_layout_insert_left).setOnClickListener(v -> insertGap(false));
     view.findViewById(R.id.custom_layout_insert_right).setOnClickListener(v -> insertGap(true));
     ((CheckBox) view.findViewById(R.id.custom_layout_pick_several))
@@ -187,8 +202,26 @@ public class CustomLayoutEditorFragment extends Fragment
     resizeEvensSide.setChecked(true);
     mLeftEdge = view.findViewById(R.id.custom_layout_left_edge);
     mRightEdge = view.findViewById(R.id.custom_layout_right_edge);
-    setUpEdge(mLeftEdge, false);
-    setUpEdge(mRightEdge, true);
+    mKeyWidth = view.findViewById(R.id.custom_layout_key_width);
+    setUpEdge(mLeftEdge, (value, step) -> moveEdgeOfSelected(false, value, step));
+    setUpEdge(mRightEdge, (value, step) -> moveEdgeOfSelected(true, value, step));
+    setUpEdge(mKeyWidth, this::setWidthOfSelected);
+    view.findViewById(R.id.custom_layout_split_key).setOnClickListener(v -> splitSelectedKey());
+    view.findViewById(R.id.custom_layout_go_to_row)
+        .setOnClickListener(v -> mTabs.selectTab(mTabs.getTabAt(TAB_ROW)));
+    view.findViewById(R.id.custom_layout_row_up).setOnClickListener(v -> stepRow(-1));
+    view.findViewById(R.id.custom_layout_row_down).setOnClickListener(v -> stepRow(1));
+    for (int action :
+        new int[] {
+          R.id.custom_layout_copy,
+          R.id.custom_layout_paste,
+          R.id.custom_layout_export,
+          R.id.custom_layout_import,
+          R.id.custom_layout_reset
+        }) {
+      view.findViewById(action).setOnClickListener(v -> perform(action));
+    }
+    showPreviewPlace();
     mSideGaps = view.findViewById(R.id.custom_layout_side_gaps);
     mSideGaps.setMax(Math.round(MAX_SIDE_GAP / SIDE_GAP_STEP));
     mSideGaps.setOnSeekBarChangeListener(
@@ -219,8 +252,9 @@ public class CustomLayoutEditorFragment extends Fragment
         .addCallback(getViewLifecycleOwner(), mAskBeforeLeaving);
 
     mTabs = view.findViewById(R.id.custom_layout_tabs);
-    mTabs.addTab(mTabs.newTab().setText(R.string.custom_layout_tab_keys));
-    mTabs.addTab(mTabs.newTab().setText(R.string.custom_layout_tab_size));
+    mTabs.addTab(mTabs.newTab().setText(R.string.custom_layout_tab_key));
+    mTabs.addTab(mTabs.newTab().setText(R.string.custom_layout_tab_row));
+    mTabs.addTab(mTabs.newTab().setText(R.string.custom_layout_tab_keyboard));
     mTabs.addOnTabSelectedListener(
         new TabLayout.OnTabSelectedListener() {
           @Override
@@ -287,22 +321,88 @@ public class CustomLayoutEditorFragment extends Fragment
         load(keyboard));
   }
 
+  /**
+   * Shows the tab that is picked: Key, Row or Keyboard. What is picked on the keyboard follows the
+   * tab: a key (or keys) on Key, a whole row on Row, nothing on Keyboard. Coming back to Key or Row
+   * finds what was picked there before.
+   */
   private void showTab() {
-    final boolean keysTab = mTabs.getSelectedTabPosition() == TAB_KEYS;
-    requireView()
-        .findViewById(R.id.custom_layout_keys_panel)
-        .setVisibility(keysTab ? View.VISIBLE : View.GONE);
-    requireView()
-        .findViewById(R.id.custom_layout_size_panel)
-        .setVisibility(keysTab ? View.GONE : View.VISIBLE);
-    mKeyboardView.setEditable(keysTab);
-    mKeyboardView.setSelection(
-        keysTab || mSizeSelection == ALL_LETTER_ROWS
-            ? CustomLayoutEditorView.NOTHING
-            : mSizeSelection,
-        CustomLayoutEditorView.NOTHING);
+    final int tab = mTabs.getSelectedTabPosition();
+    if (selectedRow() != CustomLayoutEditorView.NOTHING) {
+      if (mShownTab == TAB_KEY || mRememberedRow != selectedRow()) {
+        mRememberedKey =
+            mShownTab == TAB_KEY ? mKeyboardView.getSelectedKey() : CustomLayoutEditorView.NOTHING;
+      }
+      mRememberedRow = selectedRow();
+    }
+    mShownTab = tab;
+    final View root = requireView();
+    root.findViewById(R.id.custom_layout_key_panel)
+        .setVisibility(tab == TAB_KEY ? View.VISIBLE : View.GONE);
+    root.findViewById(R.id.custom_layout_row_panel)
+        .setVisibility(tab == TAB_ROW ? View.VISIBLE : View.GONE);
+    root.findViewById(R.id.custom_layout_keyboard_panel)
+        .setVisibility(tab == TAB_KEYBOARD ? View.VISIBLE : View.GONE);
+    mKeyboardView.setEditable(tab == TAB_KEY);
+
+    final int rows = mLayout.rows.size();
+    int row = selectedRow() != CustomLayoutEditorView.NOTHING ? selectedRow() : mRememberedRow;
+    if (row >= rows) row = CustomLayoutEditorView.NOTHING;
+    if (tab == TAB_KEY) {
+      // a key that was just tapped on the keyboard stays picked; otherwise the remembered one
+      if (mKeyboardView.getSelectedKeys().isEmpty()) {
+        final boolean remembered =
+            row != CustomLayoutEditorView.NOTHING
+                && row == mRememberedRow
+                && mRememberedKey < mLayout.rows.get(row).keys.size();
+        mKeyboardView.setSelection(
+            row, remembered ? mRememberedKey : CustomLayoutEditorView.NOTHING);
+      }
+    } else if (tab == TAB_ROW) {
+      mKeyboardView.setSelection(
+          row == CustomLayoutEditorView.NOTHING ? rows - 1 : row, CustomLayoutEditorView.NOTHING);
+    } else {
+      mKeyboardView.setSelection(CustomLayoutEditorView.NOTHING, CustomLayoutEditorView.NOTHING);
+    }
     showLayout();
-    if (!keysTab) showSizeRows();
+  }
+
+  /** Puts the keyboard over the controls or under them, as the user chose last. */
+  private void showPreviewPlace() {
+    final boolean atBottom =
+        PreferenceManager.getDefaultSharedPreferences(requireContext())
+            .getBoolean(PREF_PREVIEW_AT_BOTTOM, false);
+    final LinearLayout root = requireView().findViewById(R.id.custom_layout_root);
+    root.removeView(mKeyboardView);
+    root.addView(mKeyboardView, atBottom ? root.getChildCount() : 0);
+  }
+
+  private void flipPreviewPlace() {
+    final SharedPreferences preferences =
+        PreferenceManager.getDefaultSharedPreferences(requireContext());
+    preferences
+        .edit()
+        .putBoolean(PREF_PREVIEW_AT_BOTTOM, !preferences.getBoolean(PREF_PREVIEW_AT_BOTTOM, false))
+        .apply();
+    showPreviewPlace();
+  }
+
+  /** On the Row tab: picks the row above or under the picked one. */
+  private void stepRow(int by) {
+    final int row = Math.max(0, Math.min(mLayout.rows.size() - 1, selectedRow() + by));
+    mKeyboardView.setSelection(row, CustomLayoutEditorView.NOTHING);
+    showLayout();
+  }
+
+  private void splitSelectedKey() {
+    final CustomLayout.Key picked = selectedKey();
+    if (picked == null) return;
+    final CustomLayout.Row row = mLayout.rows.get(selectedRow());
+    final int index = row.keys.indexOf(picked);
+    row.split(index);
+    // the new gap is picked: the next key tapped in the lists goes there
+    mKeyboardView.setSelection(selectedRow(), index + 1);
+    showLayout();
   }
 
   /** Shows the layout as it is now: the keyboard, the keys left to add, the picked key. */
@@ -310,6 +410,18 @@ public class CustomLayoutEditorFragment extends Fragment
     noteChange(null);
     final AnyKeyboard keyboard = load(mBase.withLayout(mLayout, 0));
     mKeyboardView.setKeyboard(keyboard, null, null);
+    if (mShownTab == TAB_ROW) {
+      // on this tab a whole row is picked, also after a row was added or removed
+      final int row = selectedRow();
+      mKeyboardView.setSelection(
+          row == CustomLayoutEditorView.NOTHING ? mLayout.rows.size() - 1 : row,
+          CustomLayoutEditorView.NOTHING);
+      showRowPanel();
+      return;
+    } else if (mShownTab == TAB_KEYBOARD) {
+      showHeights(mSizeRows, true);
+      return;
+    }
 
     // the keys that can be added: all of them, also the ones the layout has (a key can be there
     // twice). The ones it does not have stand out, so a letter that was removed is easy to find.
@@ -342,26 +454,12 @@ public class CustomLayoutEditorFragment extends Fragment
         null,
         v -> pickCharacters());
 
-    final CustomLayout.Row sideGapsRow =
-        selectedRow() == CustomLayoutEditorView.NOTHING ? null : mLayout.rows.get(selectedRow());
-    requireView()
-        .findViewById(R.id.custom_layout_side_gaps_panel)
-        .setVisibility(sideGapsRow == null ? View.GONE : View.VISIBLE);
-    if (sideGapsRow != null) {
-      final float gaps = 100 * sideGapsRow.getSideGaps() / sideGapsRow.totalWidth();
-      mSideGaps.setProgress(Math.round(gaps / SIDE_GAP_STEP));
-      ((TextView) requireView().findViewById(R.id.custom_layout_side_gaps_value))
-          .setText(getString(R.string.custom_layout_side_gaps_value, gaps));
-    }
-
     final CustomLayout.Key selected = selectedKey();
     final int pickedKeys = mKeyboardView.getSelectedKeys().size();
     if (selected != null) {
-      final float rowWidth = mLayout.rows.get(selectedRow()).totalWidth();
       mSelectionView.setText(
           getString(R.string.custom_layout_selected_key, labelOf(selected.code)));
-      mSelectionHintView.setText(
-          getString(R.string.custom_layout_selected_key_hint, 100 * selected.width / rowWidth));
+      mSelectionHintView.setText(R.string.custom_layout_selected_key_hint);
     } else if (pickedKeys > 1) {
       mSelectionView.setText(getString(R.string.custom_layout_selected_keys, pickedKeys));
       mSelectionHintView.setText(R.string.custom_layout_selected_keys_hint);
@@ -380,6 +478,7 @@ public class CustomLayoutEditorFragment extends Fragment
       final float percent = 100 / row.totalWidth();
       showEdge(mLeftEdge, left * percent, index > 0);
       showEdge(mRightEdge, (left + selected.width) * percent, index < row.keys.size() - 1);
+      showEdge(mKeyWidth, selected.width * percent, row.keys.size() > 1);
     }
     final TextView removeKey = requireView().findViewById(R.id.custom_layout_remove_key);
     removeKey.setText(
@@ -392,22 +491,43 @@ public class CustomLayoutEditorFragment extends Fragment
         .setVisibility(
             selected == null || selected.code == CustomLayout.GAP ? View.GONE : View.VISIBLE);
 
+    final TextView evenKeys = requireView().findViewById(R.id.custom_layout_even_keys);
+    evenKeys.setText(getString(R.string.custom_layout_even_keys, pickedKeys));
+    evenKeys.setVisibility(pickedKeys > 1 ? View.VISIBLE : View.GONE);
+    final TextView goToRow = requireView().findViewById(R.id.custom_layout_go_to_row);
+    goToRow.setVisibility(
+        selectedRow() == CustomLayoutEditorView.NOTHING ? View.GONE : View.VISIBLE);
+    goToRow.setText(getString(R.string.custom_layout_go_to_row, selectedRow() + 1));
+    requireView()
+        .findViewById(R.id.custom_layout_split_key)
+        .setVisibility(selected == null ? View.GONE : View.VISIBLE);
+  }
+
+  /** The Row tab: the picked row's height, side gaps and actions. */
+  private void showRowPanel() {
     final int pickedRow = selectedRow();
-    final boolean rowPicked = pickedRow != CustomLayoutEditorView.NOTHING;
-    ((TextView) requireView().findViewById(R.id.custom_layout_row_title))
-        .setText(
-            rowPicked
-                ? getString(R.string.custom_layout_row_of, pickedRow + 1, mLayout.rows.size())
-                : getString(R.string.custom_layout_no_row));
-    final TextView removeRow = requireView().findViewById(R.id.custom_layout_remove_row);
+    final CustomLayout.Row row = mLayout.rows.get(pickedRow);
+    final View root = requireView();
+    ((TextView) root.findViewById(R.id.custom_layout_row_title))
+        .setText(getString(R.string.custom_layout_row_of, pickedRow + 1, mLayout.rows.size()));
+    int keys = 0;
+    for (CustomLayout.Key key : row.keys) {
+      if (key.code != CustomLayout.GAP) keys++;
+    }
+    ((TextView) root.findViewById(R.id.custom_layout_row_keys))
+        .setText(getString(R.string.custom_layout_row_keys, keys));
+    showHeights(mRowHeight, false);
+
+    final float gaps = 100 * row.getSideGaps() / row.totalWidth();
+    mSideGaps.setProgress(Math.round(gaps / SIDE_GAP_STEP));
+    ((TextView) root.findViewById(R.id.custom_layout_side_gaps_value))
+        .setText(getString(R.string.custom_layout_side_gaps_value, gaps));
+
+    final TextView removeRow = root.findViewById(R.id.custom_layout_remove_row);
     removeRow.setText(getString(R.string.custom_layout_remove_row, pickedRow + 1));
-    removeRow.setVisibility(rowPicked && mLayout.rows.size() > 1 ? View.VISIBLE : View.GONE);
-    final TextView evenRow = requireView().findViewById(R.id.custom_layout_even_row);
-    evenRow.setText(
-        pickedKeys > 1
-            ? getString(R.string.custom_layout_even_keys, pickedKeys)
-            : getString(R.string.custom_layout_even_row));
-    evenRow.setVisibility(rowPicked ? View.VISIBLE : View.GONE);
+    removeRow.setVisibility(mLayout.rows.size() > 1 ? View.VISIBLE : View.GONE);
+    ((TextView) root.findViewById(R.id.custom_layout_even_row))
+        .setText(R.string.custom_layout_even_row);
   }
 
   /** Shows where an edge of the picked key is, in percent of the row from its start. */
@@ -421,11 +541,11 @@ public class CustomLayoutEditorFragment extends Fragment
   }
 
   private EditText edgeValueOf(SeekBar slider) {
-    return requireView()
-        .findViewById(
-            slider == mLeftEdge
-                ? R.id.custom_layout_left_edge_value
-                : R.id.custom_layout_right_edge_value);
+    final int id;
+    if (slider == mLeftEdge) id = R.id.custom_layout_left_edge_value;
+    else if (slider == mRightEdge) id = R.id.custom_layout_right_edge_value;
+    else id = R.id.custom_layout_key_width_value;
+    return requireView().findViewById(id);
   }
 
   /**
@@ -451,13 +571,18 @@ public class CustomLayoutEditorFragment extends Fragment
     showLayout();
   }
 
-  private void setUpEdge(SeekBar slider, boolean right) {
+  private interface EdgeMover {
+    void move(float value, float step);
+  }
+
+  /** Wires a slider and its typed value: both give a value in percent of the row. */
+  private void setUpEdge(SeekBar slider, EdgeMover mover) {
     slider.setMax(Math.round(100 / EDGE_SLIDER_STEP));
     slider.setOnSeekBarChangeListener(
         new SeekBar.OnSeekBarChangeListener() {
           @Override
           public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-            if (fromUser) moveEdgeOfSelected(right, progress * EDGE_SLIDER_STEP, EDGE_SLIDER_STEP);
+            if (fromUser) mover.move(progress * EDGE_SLIDER_STEP, EDGE_SLIDER_STEP);
           }
 
           @Override
@@ -474,17 +599,34 @@ public class CustomLayoutEditorFragment extends Fragment
         (v, actionId, event) -> {
           if (actionId != EditorInfo.IME_ACTION_DONE) return false;
           try {
-            moveEdgeOfSelected(
-                right,
-                Float.parseFloat(value.getText().toString().replace(',', '.')),
-                EDGE_TYPED_STEP);
+            mover.move(
+                Float.parseFloat(value.getText().toString().replace(',', '.')), EDGE_TYPED_STEP);
           } catch (NumberFormatException e) {
-            // not a number: the edge stays
+            // not a number: nothing moves
           }
           value.clearFocus();
           showLayout();
           return false;
         });
+  }
+
+  /**
+   * Makes the picked key {@code width} wide (percent of the row) by moving its right edge, or its
+   * left edge when it is the last of its row.
+   */
+  private void setWidthOfSelected(float width, float step) {
+    final CustomLayout.Key picked = selectedKey();
+    if (picked == null) return;
+    final CustomLayout.Row row = mLayout.rows.get(selectedRow());
+    final int index = row.keys.indexOf(picked);
+    float left = 0;
+    for (int i = 0; i < index; i++) left += row.keys.get(i).width;
+    final float percent = 100 / row.totalWidth();
+    if (index < row.keys.size() - 1) {
+      moveEdgeOfSelected(true, left * percent + width, step);
+    } else {
+      moveEdgeOfSelected(false, (left + picked.width) * percent - width, step);
+    }
   }
 
   /** A short name for a key, for the places that show keys as text. */
@@ -646,7 +788,6 @@ public class CustomLayoutEditorFragment extends Fragment
       throw new IllegalStateException(e);
     }
     mKeyboardView.setSelection(CustomLayoutEditorView.NOTHING, CustomLayoutEditorView.NOTHING);
-    mSizeSelection = ALL_LETTER_ROWS;
     mAskBeforeLeaving.setEnabled(!mUndo.isEmpty());
     requireActivity().invalidateOptionsMenu();
     showTab();
@@ -678,12 +819,11 @@ public class CustomLayoutEditorFragment extends Fragment
 
   @Override
   public void onSelectionChanged() {
-    if (mTabs.getSelectedTabPosition() == TAB_KEYS) {
-      showLayout();
+    if (mShownTab == TAB_KEYBOARD) {
+      // a key was tapped: that is where the user wants to work
+      mTabs.selectTab(mTabs.getTabAt(TAB_KEY));
     } else {
-      mSizeSelection = mKeyboardView.getSelectedRow();
-      mKeyboardView.setSelection(mSizeSelection, CustomLayoutEditorView.NOTHING);
-      showSizeRows();
+      showLayout();
     }
   }
 
@@ -856,17 +996,24 @@ public class CustomLayoutEditorFragment extends Fragment
     return String.format(Locale.ROOT, "%.2f", height);
   }
 
-  /** The row list of the Size tab. Built again whenever another row is picked. */
-  private void showSizeRows() {
-    mSizeRows.removeAllViews();
+  /**
+   * The heights of rows, each with its typed value and, when it is the one being set, its slider.
+   * On the Keyboard tab ({@code all}): every row, with the slider on "all rows above the bottom
+   * row"; a tap on a row opens it on the Row tab. On the Row tab: the picked row only.
+   */
+  private void showHeights(LinearLayout container, boolean all) {
+    container.removeAllViews();
     final LayoutInflater inflater = LayoutInflater.from(requireContext());
     final List<Runnable> refreshers = new ArrayList<>();
     final int rowCount = mLayout.rows.size();
-    for (int sizeRow = rowCount > 2 ? ALL_LETTER_ROWS : 0; sizeRow < rowCount; sizeRow++) {
+    final int first = all ? (rowCount > 2 ? ALL_LETTER_ROWS : 0) : selectedRow();
+    final int end = all ? rowCount : selectedRow() + 1;
+    final int withSlider = all ? ALL_LETTER_ROWS : selectedRow();
+    for (int sizeRow = first; sizeRow < end; sizeRow++) {
       if (sizeRow == ALL_LETTER_ROWS + 1) sizeRow = 0;
       final int thisRow = sizeRow;
-      final View item = inflater.inflate(R.layout.custom_layout_size_row, mSizeRows, false);
-      mSizeRows.addView(item);
+      final View item = inflater.inflate(R.layout.custom_layout_size_row, container, false);
+      container.addView(item);
       final TextView label = item.findViewById(R.id.size_row_label);
       if (thisRow == ALL_LETTER_ROWS) label.setText(R.string.custom_layout_all_letter_rows);
       else if (thisRow == rowCount - 1) label.setText(R.string.custom_layout_bottom_row);
@@ -893,16 +1040,9 @@ public class CustomLayoutEditorFragment extends Fragment
             showTotalHeight();
           };
 
-      item.findViewById(R.id.size_row_header).setOnClickListener(v -> selectSizeRow(thisRow));
-      value.setOnFocusChangeListener(
-          (v, hasFocus) -> {
-            if (hasFocus && mSizeSelection != thisRow) {
-              mSizeSelection = thisRow;
-              mKeyboardView.setSelection(
-                  thisRow == ALL_LETTER_ROWS ? CustomLayoutEditorView.NOTHING : thisRow,
-                  CustomLayoutEditorView.NOTHING);
-            }
-          });
+      if (all && thisRow != ALL_LETTER_ROWS) {
+        item.findViewById(R.id.size_row_header).setOnClickListener(v -> openRow(thisRow));
+      }
       value.setOnEditorActionListener(
           (v, actionId, event) -> {
             if (actionId != EditorInfo.IME_ACTION_DONE) return false;
@@ -916,8 +1056,7 @@ public class CustomLayoutEditorFragment extends Fragment
             return false;
           });
 
-      if (thisRow == mSizeSelection) {
-        item.setBackgroundResource(R.color.custom_layout_accent_tint);
+      if (thisRow == withSlider) {
         value.setBackgroundResource(R.drawable.custom_layout_value_box);
         slider.setVisibility(View.VISIBLE);
         slider.setMax(toProgress(CustomLayout.MAX_ROW_HEIGHT));
@@ -969,12 +1108,10 @@ public class CustomLayoutEditorFragment extends Fragment
     showTotalHeight();
   }
 
-  private void selectSizeRow(int sizeRow) {
-    mSizeSelection = sizeRow;
-    mKeyboardView.setSelection(
-        sizeRow == ALL_LETTER_ROWS ? CustomLayoutEditorView.NOTHING : sizeRow,
-        CustomLayoutEditorView.NOTHING);
-    showSizeRows();
+  /** From the Keyboard tab: the Row tab with {@code row} picked. */
+  private void openRow(int row) {
+    mKeyboardView.setSelection(row, CustomLayoutEditorView.NOTHING);
+    mTabs.selectTab(mTabs.getTabAt(TAB_ROW));
   }
 
   private void showTotalHeight() {
@@ -1001,11 +1138,17 @@ public class CustomLayoutEditorFragment extends Fragment
 
   @Override
   public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-    final int itemId = item.getItemId();
+    return perform(item.getItemId()) || super.onOptionsItemSelected(item);
+  }
+
+  /** Does what the menu item or link {@code itemId} stands for; false if it is not one of them. */
+  private boolean perform(int itemId) {
     if (itemId == R.id.custom_layout_save) {
       save();
     } else if (itemId == R.id.custom_layout_undo) {
       undo();
+    } else if (itemId == R.id.custom_layout_flip) {
+      flipPreviewPlace();
     } else if (itemId == R.id.custom_layout_copy) {
       copyToClipboard();
     } else if (itemId == R.id.custom_layout_paste) {
@@ -1020,7 +1163,6 @@ public class CustomLayoutEditorFragment extends Fragment
       mLayout.rows.clear();
       mLayout.rows.addAll(original.rows);
       mKeyboardView.setSelection(CustomLayoutEditorView.NOTHING, CustomLayoutEditorView.NOTHING);
-      mSizeSelection = ALL_LETTER_ROWS;
       showTab();
     } else if (itemId == R.id.custom_layout_delete) {
       mFactory.setAddOnEnabled(mLayout.id, false);
@@ -1029,7 +1171,7 @@ public class CustomLayoutEditorFragment extends Fragment
     } else if (itemId == R.id.custom_layout_share_bottom_row) {
       shareBottomRow();
     } else {
-      return super.onOptionsItemSelected(item);
+      return false;
     }
     return true;
   }
@@ -1099,7 +1241,6 @@ public class CustomLayoutEditorFragment extends Fragment
       return;
     }
     mKeyboardView.setSelection(CustomLayoutEditorView.NOTHING, CustomLayoutEditorView.NOTHING);
-    mSizeSelection = ALL_LETTER_ROWS;
     showTab();
   }
 

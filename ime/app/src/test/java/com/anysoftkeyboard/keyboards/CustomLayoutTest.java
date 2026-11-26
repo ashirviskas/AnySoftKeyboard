@@ -325,6 +325,18 @@ public class CustomLayoutTest {
   }
 
   @Test
+  public void testSplitHalvesAKeyAndLeavesAGap() {
+    final CustomLayout.Row row = row(20, 30, 50);
+    row.split(1);
+    Assert.assertEquals(4, row.keys.size());
+    Assert.assertEquals('b', row.keys.get(1).code);
+    Assert.assertEquals(15f, row.keys.get(1).width, 0.01f);
+    Assert.assertEquals(CustomLayout.GAP, row.keys.get(2).code);
+    Assert.assertEquals(15f, row.keys.get(2).width, 0.01f);
+    Assert.assertEquals(100f, row.totalWidth(), 0.01f);
+  }
+
+  @Test
   public void testEvenWidthsKeepsGaps() {
     final CustomLayout.Row row = row(10, 35, 25, 20);
     row.keys.add(0, new CustomLayout.Key(CustomLayout.GAP, 10));

@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
 import com.anysoftkeyboard.RobolectricFragmentTestCase;
 import com.anysoftkeyboard.api.KeyCodes;
@@ -409,39 +410,194 @@ public class CustomLayoutEditorFragmentTest
     Assert.assertEquals(5, layoutOf(keyboard).rows.size());
   }
 
+  private static void openTab(CustomLayoutEditorFragment editor, int tab) {
+    final TabLayout tabs = editor.requireView().findViewById(R.id.custom_layout_tabs);
+    tabs.selectTab(tabs.getTabAt(tab));
+    TestRxSchedulers.drainAllTasks();
+  }
+
+  private static int shownTab(CustomLayoutEditorFragment editor) {
+    return ((TabLayout) editor.requireView().findViewById(R.id.custom_layout_tabs))
+        .getSelectedTabPosition();
+  }
+
+  private static String textOf(CustomLayoutEditorFragment editor, int viewId) {
+    return ((TextView) editor.requireView().findViewById(viewId)).getText().toString();
+  }
+
   @Test
-  public void testSizeTabListsRowsAndSetsHeights() {
+  public void testRowTabIsAboutOneRow() {
     final CustomLayoutEditorFragment editor = openEditorForEnglish();
     final CustomLayoutEditorView keyboard = keyboardView(editor);
-    final TabLayout tabs = editor.requireView().findViewById(R.id.custom_layout_tabs);
-    tabs.selectTab(tabs.getTabAt(1));
-    TestRxSchedulers.drainAllTasks();
+    final View root = editor.requireView();
+    Assert.assertEquals(
+        View.VISIBLE, root.findViewById(R.id.custom_layout_key_panel).getVisibility());
+    Assert.assertEquals(View.GONE, root.findViewById(R.id.custom_layout_row_panel).getVisibility());
 
-    final ViewGroup rows = editor.requireView().findViewById(R.id.custom_layout_size_rows);
-    // "all letter rows" and the five rows
-    Assert.assertEquals(6, rows.getChildCount());
-    final int heightBefore = keyboard.getKeyboard().getHeight();
+    // with nothing picked the Row tab starts at the bottom row
+    openTab(editor, 1);
+    Assert.assertEquals(View.GONE, root.findViewById(R.id.custom_layout_key_panel).getVisibility());
+    Assert.assertEquals(
+        View.VISIBLE, root.findViewById(R.id.custom_layout_row_panel).getVisibility());
+    Assert.assertEquals(4, keyboard.getSelectedRow());
+    Assert.assertEquals(CustomLayoutEditorView.NOTHING, keyboard.getSelectedKey());
+    Assert.assertEquals("Row 5 of 5", textOf(editor, R.id.custom_layout_row_title));
 
-    // picking a row on the keyboard opens its slider
-    tap(keyboard, 2, 0);
+    // a tap on the keyboard picks a row here, not a key; the arrows step through the rows
+    tap(keyboard, 2, 3);
     Assert.assertEquals(2, keyboard.getSelectedRow());
     Assert.assertEquals(CustomLayoutEditorView.NOTHING, keyboard.getSelectedKey());
-    final ViewGroup picked = (ViewGroup) rows.getChildAt(3);
-    Assert.assertEquals(View.VISIBLE, picked.findViewById(R.id.size_row_slider).getVisibility());
-    Assert.assertEquals(
-        View.GONE, rows.getChildAt(2).findViewById(R.id.size_row_slider).getVisibility());
+    Assert.assertEquals(1, shownTab(editor));
+    click(editor, R.id.custom_layout_row_up);
+    Assert.assertEquals(1, keyboard.getSelectedRow());
+    Assert.assertEquals("Row 2 of 5", textOf(editor, R.id.custom_layout_row_title));
+    click(editor, R.id.custom_layout_row_down);
+    click(editor, R.id.custom_layout_row_down);
+    click(editor, R.id.custom_layout_row_down);
+    click(editor, R.id.custom_layout_row_down);
+    Assert.assertEquals(4, keyboard.getSelectedRow());
+    click(editor, R.id.custom_layout_row_up);
+    click(editor, R.id.custom_layout_row_up);
+    Assert.assertEquals(2, keyboard.getSelectedRow());
 
-    // a typed height is taken
-    final EditText typed = picked.findViewById(R.id.size_row_value);
+    // its height: one item, with the slider, and a typed height is taken
+    final ViewGroup height = root.findViewById(R.id.custom_layout_row_height);
+    Assert.assertEquals(1, height.getChildCount());
+    Assert.assertEquals(
+        View.VISIBLE, height.getChildAt(0).findViewById(R.id.size_row_slider).getVisibility());
+    final int heightBefore = keyboard.getKeyboard().getHeight();
+    final EditText typed = height.getChildAt(0).findViewById(R.id.size_row_value);
     typed.setText("0.67");
     typed.onEditorAction(EditorInfo.IME_ACTION_DONE);
     Assert.assertEquals(0.67f, layoutOf(keyboard).rows.get(2).height, 0.001f);
     Assert.assertTrue(keyboard.getKeyboard().getHeight() < heightBefore);
+
+    // rows are added and removed around the picked one, and a row stays picked
+    click(editor, R.id.custom_layout_add_row_above);
+    Assert.assertEquals(6, layoutOf(keyboard).rows.size());
+    Assert.assertEquals(2, keyboard.getSelectedRow());
+    Assert.assertEquals(CustomLayoutEditorView.NOTHING, keyboard.getSelectedKey());
+    Assert.assertEquals("Row 3 of 6", textOf(editor, R.id.custom_layout_row_title));
+    click(editor, R.id.custom_layout_remove_row);
+    Assert.assertEquals(5, layoutOf(keyboard).rows.size());
+    Assert.assertTrue(keyboard.getSelectedRow() >= 0);
+  }
+
+  @Test
+  public void testKeyboardTabIsAboutTheWholeLayout() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    tap(keyboard, 1, 2);
+    openTab(editor, 2);
+    final View root = editor.requireView();
     Assert.assertEquals(
-        "0.67", ((EditText) picked.findViewById(R.id.size_row_value)).getText().toString());
+        View.VISIBLE, root.findViewById(R.id.custom_layout_keyboard_panel).getVisibility());
+    Assert.assertEquals(CustomLayoutEditorView.NOTHING, keyboard.getSelectedRow());
+    Assert.assertEquals(
+        String.format(java.util.Locale.ROOT, "Total %.2f rows", layoutOf(keyboard).totalHeight()),
+        textOf(editor, R.id.custom_layout_total_height));
+
+    // "all rows above the bottom row" with its slider, then the five rows
+    final ViewGroup rows = root.findViewById(R.id.custom_layout_size_rows);
+    Assert.assertEquals(6, rows.getChildCount());
+    Assert.assertEquals(
+        View.VISIBLE, rows.getChildAt(0).findViewById(R.id.size_row_slider).getVisibility());
     Assert.assertEquals(
         "mixed",
         ((EditText) rows.getChildAt(0).findViewById(R.id.size_row_value)).getText().toString());
+    final EditText all = rows.getChildAt(0).findViewById(R.id.size_row_value);
+    all.setText("0.8");
+    all.onEditorAction(EditorInfo.IME_ACTION_DONE);
+    for (int row = 0; row < 4; row++) {
+      Assert.assertEquals(0.8f, layoutOf(keyboard).rows.get(row).height, 0.001f);
+    }
+    Assert.assertEquals(1f, layoutOf(keyboard).rows.get(4).height, 0.001f);
+
+    // a row of the list opens on the Row tab
+    rows.getChildAt(3).findViewById(R.id.size_row_header).performClick();
+    TestRxSchedulers.drainAllTasks();
+    Assert.assertEquals(1, shownTab(editor));
+    Assert.assertEquals(2, keyboard.getSelectedRow());
+
+    // a key tapped on the keyboard from here opens on the Key tab
+    openTab(editor, 2);
+    tap(keyboard, 3, 1);
+    Assert.assertEquals(0, shownTab(editor));
+    Assert.assertEquals(3, keyboard.getSelectedRow());
+    Assert.assertEquals(1, keyboard.getSelectedKey());
+  }
+
+  @Test
+  public void testKeyTabFindsItsKeyAgainAndLeadsToItsRow() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    tap(keyboard, 1, 2);
+    Assert.assertEquals("Row 2 ›", textOf(editor, R.id.custom_layout_go_to_row));
+    click(editor, R.id.custom_layout_go_to_row);
+    Assert.assertEquals(1, shownTab(editor));
+    Assert.assertEquals(1, keyboard.getSelectedRow());
+    Assert.assertEquals(CustomLayoutEditorView.NOTHING, keyboard.getSelectedKey());
+
+    openTab(editor, 0);
+    Assert.assertEquals(1, keyboard.getSelectedRow());
+    Assert.assertEquals(2, keyboard.getSelectedKey());
+  }
+
+  @Test
+  public void testWidthOfTheKeyAndSplit() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    click(editor, R.id.custom_layout_resize_evens_side);
+    tap(keyboard, 1, 1);
+    final EditText width = editor.requireView().findViewById(R.id.custom_layout_key_width_value);
+    Assert.assertEquals("10.0", width.getText().toString());
+    width.setText("12.5");
+    width.onEditorAction(EditorInfo.IME_ACTION_DONE);
+    CustomLayout.Row row = layoutOf(keyboard).rows.get(1);
+    Assert.assertEquals(12.5f, row.keys.get(1).width, 0.06f);
+    Assert.assertEquals(7.5f, row.keys.get(2).width, 0.06f);
+    Assert.assertEquals(10f, row.keys.get(0).width, 0.06f);
+
+    // the last key of a row grows to the left
+    tap(keyboard, 1, 9);
+    width.setText("15");
+    width.onEditorAction(EditorInfo.IME_ACTION_DONE);
+    row = layoutOf(keyboard).rows.get(1);
+    Assert.assertEquals(15f, row.keys.get(9).width, 0.06f);
+    Assert.assertEquals(5f, row.keys.get(8).width, 0.06f);
+
+    // split: half the key, and a gap in the other half, picked to take a key
+    click(editor, R.id.custom_layout_split_key);
+    row = layoutOf(keyboard).rows.get(1);
+    Assert.assertEquals(11, row.keys.size());
+    Assert.assertEquals('p', row.keys.get(9).code);
+    Assert.assertEquals(7.5f, row.keys.get(9).width, 0.06f);
+    Assert.assertEquals(CustomLayout.GAP, row.keys.get(10).code);
+    Assert.assertEquals(7.5f, row.keys.get(10).width, 0.06f);
+    Assert.assertEquals(10, keyboard.getSelectedKey());
+    chipFor(editor, KeyCodes.UNDO).performClick();
+    Assert.assertEquals(KeyCodes.UNDO, layoutOf(keyboard).rows.get(1).keys.get(10).code);
+  }
+
+  @Test
+  public void testTheKeyboardCanBeShownUnderTheControlsAndThatIsKept() {
+    CustomLayoutEditorFragment editor = openEditorForEnglish();
+    ViewGroup root = editor.requireView().findViewById(R.id.custom_layout_root);
+    Assert.assertSame(keyboardView(editor), root.getChildAt(0));
+
+    select(editor, R.id.custom_layout_flip);
+    Assert.assertSame(keyboardView(editor), root.getChildAt(root.getChildCount() - 1));
+
+    // another layout opens the same way
+    select(editor, R.id.custom_layout_save);
+    ((KeyboardAddOnBrowserFragment) getCurrentFragment())
+        .onEditAddOnClicked(factory().getAddOnById(factory().getCustomLayouts().get(0).id));
+    TestRxSchedulers.drainAllTasks();
+    editor = (CustomLayoutEditorFragment) getCurrentFragment();
+    root = editor.requireView().findViewById(R.id.custom_layout_root);
+    Assert.assertSame(keyboardView(editor), root.getChildAt(root.getChildCount() - 1));
+    select(editor, R.id.custom_layout_flip);
+    Assert.assertSame(keyboardView(editor), root.getChildAt(0));
   }
 
   @Test
