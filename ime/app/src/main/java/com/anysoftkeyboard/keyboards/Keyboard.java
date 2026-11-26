@@ -498,6 +498,15 @@ public abstract class Keyboard {
       }
     }
 
+    /** Moves and sizes the key after it was created (a {@link CustomLayout} does that). */
+    void setBounds(int x, int y, int width, int height) {
+      this.x = x;
+      this.y = y;
+      this.width = width;
+      this.height = height;
+      this.gap = 0;
+    }
+
     public int getMultiTapCode(int tapCount) {
       final int codesCount = getCodesCount();
       if (codesCount == 0) return KeyCodes.SPACE; // space is good for nothing

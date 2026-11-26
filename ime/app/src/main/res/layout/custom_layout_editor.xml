@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:focusableInTouchMode="true"
+    android:orientation="vertical">
+
+    <!-- The root takes the first focus, so the name field does not open the keyboard at once. -->
+    <EditText
+        android:id="@+id/custom_layout_name"
+        style="@style/CustomLayout.Text"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@null"
+        android:fontFamily="sans-serif-medium"
+        android:hint="@string/custom_layout_name_hint"
+        android:importantForAutofill="no"
+        android:inputType="textCapSentences"
+        android:maxLines="1"
+        android:paddingHorizontal="16dp"
+        android:textSize="16sp" />
+
+    <View style="@style/CustomLayout.Divider" />
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/custom_layout_tabs"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:background="@android:color/transparent"
+        app:tabIndicatorColor="@color/custom_layout_accent"
+        app:tabIndicatorHeight="2dp"
+        app:tabRippleColor="@color/custom_layout_accent_tint"
+        app:tabSelectedTextColor="@color/custom_layout_accent"
+        app:tabTextAppearance="@style/CustomLayout.Text"
+        app:tabTextColor="@color/custom_layout_muted" />
+
+    <View style="@style/CustomLayout.Divider" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:id="@+id/custom_layout_keys_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- the picked key and what can be done with it -->
+                <TextView
+                    android:id="@+id/custom_layout_selection"
+                    style="@style/CustomLayout.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingTop="10dp" />
+
+                <TextView
+                    android:id="@+id/custom_layout_selection_hint"
+                    style="@style/CustomLayout.Text.Small"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="16dp">
+
+                        <TextView
+                            android:id="@+id/custom_layout_insert_left"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_insert_left" />
+                        <TextView
+                            android:id="@+id/custom_layout_insert_right"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_insert_right" />
+                        <TextView
+                            android:id="@+id/custom_layout_long_press"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_long_press" />
+                        <TextView
+                            android:id="@+id/custom_layout_remove_key"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_remove_key" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+
+                <!-- the edges of the picked key, for finer steps than dragging on the keyboard -->
+                <LinearLayout
+                    android:id="@+id/custom_layout_edges_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/CustomLayout.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:minWidth="76dp"
+                            android:text="@string/custom_layout_left_edge" />
+
+                        <SeekBar
+                            android:id="@+id/custom_layout_left_edge"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:progressTint="@color/custom_layout_line"
+                            android:thumbTint="@color/custom_layout_accent" />
+
+                        <EditText
+                            android:id="@+id/custom_layout_left_edge_value"
+                            style="@style/CustomLayout.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="28dp"
+                            android:background="@drawable/custom_layout_chip"
+                            android:fontFamily="sans-serif-medium"
+                            android:gravity="center"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberDecimal"
+                            android:minWidth="56dp"
+                            android:paddingHorizontal="8dp"
+                            android:selectAllOnFocus="true"
+                            android:textColor="@color/custom_layout_accent" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/CustomLayout.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:minWidth="76dp"
+                            android:text="@string/custom_layout_right_edge" />
+
+                        <SeekBar
+                            android:id="@+id/custom_layout_right_edge"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:progressTint="@color/custom_layout_line"
+                            android:thumbTint="@color/custom_layout_accent" />
+
+                        <EditText
+                            android:id="@+id/custom_layout_right_edge_value"
+                            style="@style/CustomLayout.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="28dp"
+                            android:background="@drawable/custom_layout_chip"
+                            android:fontFamily="sans-serif-medium"
+                            android:gravity="center"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberDecimal"
+                            android:minWidth="56dp"
+                            android:paddingHorizontal="8dp"
+                            android:selectAllOnFocus="true"
+                            android:textColor="@color/custom_layout_accent" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <!-- its row -->
+                <TextView
+                    android:id="@+id/custom_layout_row_title"
+                    style="@style/CustomLayout.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingTop="10dp" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="16dp">
+
+                        <TextView
+                            android:id="@+id/custom_layout_even_row"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                        <TextView
+                            android:id="@+id/custom_layout_add_row_above"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_add_row_above" />
+
+                        <TextView
+                            android:id="@+id/custom_layout_add_row"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_add_row" />
+                        <TextView
+                            android:id="@+id/custom_layout_remove_row"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+
+                <LinearLayout
+                    android:id="@+id/custom_layout_side_gaps_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp">
+
+                    <TextView
+                        style="@style/CustomLayout.Text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/custom_layout_side_gaps" />
+
+                    <SeekBar
+                        android:id="@+id/custom_layout_side_gaps"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:progressTint="@color/custom_layout_accent"
+                        android:thumbTint="@color/custom_layout_accent" />
+
+                    <TextView
+                        android:id="@+id/custom_layout_side_gaps_value"
+                        style="@style/CustomLayout.Text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="end"
+                        android:minWidth="44dp"
+                        android:textColor="@color/custom_layout_accent" />
+                </LinearLayout>
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <!-- how touches on the keyboard below are taken -->
+                <CheckBox
+                    android:id="@+id/custom_layout_pick_several"
+                    style="@style/CustomLayout.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:buttonTint="@color/custom_layout_accent"
+                    android:text="@string/custom_layout_pick_several" />
+
+                <CheckBox
+                    android:id="@+id/custom_layout_resize_evens_side"
+                    style="@style/CustomLayout.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginHorizontal="10dp"
+                    android:buttonTint="@color/custom_layout_accent"
+                    android:text="@string/custom_layout_resize_evens_side" />
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <TextView
+                    style="@style/CustomLayout.Text.Section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/custom_layout_usual_keys" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/custom_layout_usual_keys"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    app:chipSpacingHorizontal="6dp"
+                    app:chipSpacingVertical="6dp" />
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <TextView
+                    style="@style/CustomLayout.Text.Section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/custom_layout_keyboard_keys" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/custom_layout_keyboard_keys"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    app:chipSpacingHorizontal="6dp"
+                    app:chipSpacingVertical="6dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/custom_layout_size_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="10dp">
+
+                    <TextView
+                        android:id="@+id/custom_layout_total_height"
+                        style="@style/CustomLayout.Text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium" />
+
+                    <TextView
+                        android:id="@+id/custom_layout_total_height_hint"
+                        style="@style/CustomLayout.Text.Small"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <LinearLayout
+                    android:id="@+id/custom_layout_size_rows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </FrameLayout>
+    </ScrollView>
+
+    <com.anysoftkeyboard.keyboards.views.CustomLayoutEditorView
+        android:id="@+id/custom_layout_keyboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</LinearLayout>

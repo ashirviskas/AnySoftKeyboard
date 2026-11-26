@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One row of the keyboard on the Size tab: its height, and (for the picked row) the slider. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/size_row_header"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:background="?attr/selectableItemBackground"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp">
+
+        <TextView
+            android:id="@+id/size_row_label"
+            style="@style/CustomLayout.Text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+        <EditText
+            android:id="@+id/size_row_value"
+            style="@style/CustomLayout.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:background="@null"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:imeOptions="actionDone"
+            android:importantForAutofill="no"
+            android:inputType="numberDecimal"
+            android:minWidth="56dp"
+            android:paddingHorizontal="8dp"
+            android:selectAllOnFocus="true"
+            android:textColor="@color/custom_layout_accent" />
+    </LinearLayout>
+
+    <com.anysoftkeyboard.ui.settings.widget.TickSeekBar
+        android:id="@+id/size_row_slider"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="28dp"
+        android:paddingTop="30dp"
+        android:paddingBottom="52dp"
+        android:progressBackgroundTint="@color/custom_layout_line"
+        android:progressTint="@color/custom_layout_line"
+        android:thumbTint="@color/custom_layout_accent"
+        android:visibility="gone" />
+
+    <View style="@style/CustomLayout.Divider" />
+</LinearLayout>

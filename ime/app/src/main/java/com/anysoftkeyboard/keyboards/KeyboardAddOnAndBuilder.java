@@ -17,6 +17,7 @@
 package com.anysoftkeyboard.keyboards;
 
 import android.content.Context;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.anysoftkeyboard.addons.AddOn;
 import com.anysoftkeyboard.addons.AddOnImpl;
@@ -34,6 +35,7 @@ public class KeyboardAddOnAndBuilder extends AddOnImpl {
   private final String mRadicalKeyCharacters;
   private final String mRadicalCandidateSelectorKeys;
   private final String mPhoneticLayout;
+  @Nullable private final String mVariantOf;
   private final boolean mAsciiOnlyPopups;
   private final boolean mSupportsGestureTyping;
   private final boolean mKeyboardDefaultEnabled;
@@ -59,6 +61,7 @@ public class KeyboardAddOnAndBuilder extends AddOnImpl {
       String radicalKeyCharacters,
       String radicalCandidateSelectorKeys,
       String phoneticLayout,
+      @Nullable String variantOf,
       boolean asciiOnlyPopups,
       boolean supportsGestureTyping,
       boolean keyboardDefaultEnabled) {
@@ -80,6 +83,7 @@ public class KeyboardAddOnAndBuilder extends AddOnImpl {
     mRadicalKeyCharacters = radicalKeyCharacters;
     mRadicalCandidateSelectorKeys = radicalCandidateSelectorKeys;
     mPhoneticLayout = phoneticLayout;
+    mVariantOf = variantOf;
     mAsciiOnlyPopups = asciiOnlyPopups;
     mSupportsGestureTyping = supportsGestureTyping;
     mKeyboardDefaultEnabled = keyboardDefaultEnabled;
@@ -126,6 +130,7 @@ public class KeyboardAddOnAndBuilder extends AddOnImpl {
         hasRadicalInput,
         radicalKeyCharacters,
         radicalCandidateSelectorKeys,
+        null,
         null,
         asciiOnlyPopups,
         !hasRadicalInput,
@@ -199,6 +204,16 @@ public class KeyboardAddOnAndBuilder extends AddOnImpl {
   }
 
   /**
+   * The keyboards that are one keyboard in several arrangements share this: the id of the keyboard
+   * the others are variants of. The settings show such a group as one keyboard with layouts to
+   * choose from.
+   */
+  @NonNull
+  public String getLayoutGroupId() {
+    return mVariantOf != null ? mVariantOf : getId();
+  }
+
+  /**
    * Checks if the given key code is a valid radical sequence character for this keyboard. Letters
    * (a-z, A-Z) and digits (0-9) are always valid. Additional characters are defined per-keyboard
    * via the radicalKeyCharacters XML attribute.
@@ -210,6 +225,48 @@ public class KeyboardAddOnAndBuilder extends AddOnImpl {
       return true;
     }
     return mRadicalKeyCharacters != null && mRadicalKeyCharacters.indexOf((char) keyCode) >= 0;
+  }
+
+  /**
+   * A keyboard that types as this one does and shows its keys as {@code layout} says, under the
+   * layout's id and name.
+   */
+  @Nullable
+  public KeyboardAddOnAndBuilder withLayout(@NonNull CustomLayout layout, int sortIndex) {
+    final Context packageContext = getPackageContext();
+    if (packageContext == null) return null;
+    return new KeyboardAddOnAndBuilder(
+        mAskContext,
+        packageContext,
+        getApiVersion(),
+        layout.id,
+        layout.name,
+        mResId,
+        mLandscapeResId,
+        mDefaultDictionary,
+        mIconResId,
+        mQwertyTranslationId,
+        mAdditionalIsLetterExceptions,
+        mSentenceSeparators,
+        getName(),
+        false,
+        sortIndex,
+        mHasRadicalInput,
+        mRadicalKeyCharacters,
+        mRadicalCandidateSelectorKeys,
+        mPhoneticLayout,
+        getLayoutGroupId(),
+        mAsciiOnlyPopups,
+        mSupportsGestureTyping,
+        false) {
+      @Nullable
+      @Override
+      public AnyKeyboard createKeyboard(@Keyboard.KeyboardRowModeId int mode) {
+        final AnyKeyboard keyboard = super.createKeyboard(mode);
+        if (keyboard != null) keyboard.setCustomLayout(layout);
+        return keyboard;
+      }
+    };
   }
 
   @Nullable

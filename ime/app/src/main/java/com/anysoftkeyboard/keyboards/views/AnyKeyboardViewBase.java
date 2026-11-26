@@ -1241,6 +1241,16 @@ public class AnyKeyboardViewBase extends View implements InputViewBinder, Pointe
         paint.setShadowLayer(mShadowRadius, mShadowOffsetX, mShadowOffsetY, mShadowColor);
 
         final float textWidth = adjustTextSizeForLabel(paint, label, key.width);
+        // a label that is too long even in the smallest size (the name of the next keyboard on a
+        // narrow key) is shown as far as it fits
+        if (label.length() > 1 && paint.measureText(label, 0, label.length()) > key.width) {
+          label =
+              TextUtils.ellipsize(
+                  label,
+                  new TextPaint(paint),
+                  key.width - mKeyBackgroundPadding.left - mKeyBackgroundPadding.right,
+                  TextUtils.TruncateAt.END);
+        }
 
         // the center of the drawable space, which is value used
         // previously for vertically
@@ -1392,7 +1402,7 @@ public class AnyKeyboardViewBase extends View implements InputViewBinder, Pointe
     // text:
     // 1) divide the text size by 1.5
     // 2) if still too large, divide by 2.5
-    // 3) show no text
+    // 3) keep that size; the caller cuts the text to what fits
     if (textWidth > width) {
       textSize = mKeyTextSize / 1.5f;
       paint.setTextSize(textSize);
@@ -1402,9 +1412,7 @@ public class AnyKeyboardViewBase extends View implements InputViewBinder, Pointe
         paint.setTextSize(textSize);
         textWidth = paint.measureText(label, 0, label.length());
         if (textWidth > width) {
-          textSize = 0f;
-          paint.setTextSize(textSize);
-          textWidth = paint.measureText(label, 0, label.length());
+          textWidth = width;
         }
       }
     }

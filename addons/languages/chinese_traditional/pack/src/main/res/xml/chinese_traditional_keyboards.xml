@@ -51,11 +51,13 @@
               physicalKeyboardMappingResId="@xml/chinese_traditional_physical" />
 
     <!-- 大千 with ， and 。 at the end of rows 2 and 3 (the plain one has them only in the
-         bottom row). -->
+         bottom row). The same keyboard in another arrangement: the settings show the two as
+         layouts of one keyboard (variantOf). -->
     <Keyboard nameResId="@string/chinese_traditional_zhuyin_punct_keyboard"
               iconResId="@drawable/ic_status_chinese_traditional"
               layoutResId="@xml/qwerty_zhuyin_punct"
               id="@string/chinese_traditional_zhuyin_punct_keyboard_id"
+              variantOf="@string/chinese_traditional_zhuyin_keyboard_id"
               defaultDictionaryLocale="zh-zhuyin"
               description="@string/chinese_traditional_zhuyin_punct_keyboard_description"
               index="8" defaultEnabled="false" hasRadicalInput="true"

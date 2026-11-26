@@ -50,6 +50,10 @@ import net.evendanan.pixel.UiUtils;
 
 public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fragment {
 
+  private static final int VIEW_TYPE_ADD_ON = 0;
+  private static final int VIEW_TYPE_MARKET = 1;
+  private static final int VIEW_TYPE_CREATE = 2;
+
   private final Set<String> mEnabledAddOnsIds = new HashSet<>();
   @NonNull private final String mLogTag;
   @StringRes private final int mFragmentTitleResId;
@@ -240,7 +244,7 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
     super.onStart();
     // I need a mutable list.
     mAllAddOns.clear();
-    mAllAddOns.addAll(mFactory.getAllAddOns());
+    mAllAddOns.addAll(getAddOnsToShow());
 
     mEnabledAddOnsIds.clear();
     mEnabledAddOnsIds.addAll(mFactory.getEnabledIds());
@@ -266,7 +270,8 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
         new GridLayoutManager.SpanSizeLookup() {
           @Override
           public int getSpanSize(int position) {
-            if (position == mAllAddOns.size()) {
+            final RecyclerView.Adapter<?> adapter = mRecyclerView.getAdapter();
+            if (adapter != null && adapter.getItemViewType(position) == VIEW_TYPE_MARKET) {
               return mColumnsCount;
             } else {
               return 1;
@@ -276,6 +281,49 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
 
     return manager;
   }
+
+  /** The add-ons this screen lists; all of them unless a subclass shows a part. */
+  @NonNull
+  protected List<E> getAddOnsToShow() {
+    return mFactory.getAllAddOns();
+  }
+
+  /** Whether the card of {@code addOn} has the enabled mark. */
+  protected boolean isShownAsEnabled(@NonNull E addOn) {
+    return mEnabledAddOnsIds.contains(addOn.getId());
+  }
+
+  /**
+   * A tap on the card of {@code addOn}.
+   *
+   * @return true if the tap was dealt with; false to enable or disable the add-on as usual.
+   */
+  protected boolean onAddOnClicked(@NonNull E addOn) {
+    return false;
+  }
+
+  /**
+   * The text of the control next to the name of an {@link #isEditable editable} add-on. With no
+   * text the control is a pencil.
+   */
+  @NonNull
+  protected CharSequence getEditLabel(@NonNull E addOn) {
+    return "";
+  }
+
+  /** Whether the list ends with a card that lets the user make an add-on of their own. */
+  protected boolean canCreateAddOns() {
+    return false;
+  }
+
+  protected void onCreateAddOnClicked() {}
+
+  /** Whether the user can change {@code addOn} itself (not only enable it). */
+  protected boolean isEditable(@NonNull E addOn) {
+    return false;
+  }
+
+  protected void onEditAddOnClicked(@NonNull E addOn) {}
 
   protected abstract void applyAddOnToDemoKeyboardView(
       @NonNull final E addOn, @NonNull final DemoAnyKeyboardView demoKeyboardView);
@@ -290,6 +338,7 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
       implements View.OnClickListener {
     private final DemoAnyKeyboardView mDemoKeyboardView;
     private final ImageView mAddOnEnabledView;
+    private final TextView mAddOnEditView;
     private final TextView mAddOnTitle;
     private final TextView mAddOnDescription;
     private E mAddOn;
@@ -299,6 +348,8 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
       itemView.setOnClickListener(this);
       mDemoKeyboardView = itemView.findViewById(R.id.item_keyboard_view);
       mAddOnEnabledView = itemView.findViewById(R.id.enabled_image);
+      mAddOnEditView = itemView.findViewById(R.id.edit_image);
+      mAddOnEditView.setOnClickListener(v -> onEditAddOnClicked(mAddOn));
       mAddOnTitle = itemView.findViewById(R.id.title);
       mAddOnDescription = itemView.findViewById(R.id.subtitle);
       mAddOnTitle.setSelected(true);
@@ -308,14 +359,20 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
       mAddOn = addOn;
       mAddOnTitle.setText(addOn.getName());
       mAddOnDescription.setText(addOn.getDescription());
-      final boolean isEnabled = mEnabledAddOnsIds.contains(addOn.getId());
+      final boolean isEnabled = isShownAsEnabled(addOn);
       mAddOnEnabledView.setVisibility(isEnabled ? View.VISIBLE : View.INVISIBLE);
       mAddOnEnabledView.setImageResource(isEnabled ? R.drawable.ic_accept : R.drawable.ic_cancel);
+      mAddOnEditView.setVisibility(isEditable(addOn) ? View.VISIBLE : View.GONE);
+      final CharSequence editLabel = getEditLabel(addOn);
+      mAddOnEditView.setText(editLabel);
+      mAddOnEditView.setCompoundDrawablesRelativeWithIntrinsicBounds(
+          editLabel.length() == 0 ? R.drawable.ic_edit : 0, 0, 0, 0);
       applyAddOnToDemoKeyboardView(addOn, mDemoKeyboardView);
     }
 
     @Override
     public void onClick(View v) {
+      if (onAddOnClicked(mAddOn)) return;
       final boolean isEnabled = mEnabledAddOnsIds.contains(mAddOn.getId());
       if (mIsSingleSelection) {
         if (isEnabled) return; // already enabled
@@ -356,9 +413,15 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-      if (viewType == 0) {
+      if (viewType == VIEW_TYPE_ADD_ON) {
         View itemView = mLayoutInflater.inflate(R.layout.add_on_browser_view_item, parent, false);
         return new KeyboardAddOnViewHolder(itemView);
+      } else if (viewType == VIEW_TYPE_CREATE) {
+        View itemView = mLayoutInflater.inflate(R.layout.add_on_browser_create_item, parent, false);
+        itemView.setOnClickListener(v -> onCreateAddOnClicked());
+        return new RecyclerView.ViewHolder(itemView) {
+          /*empty implementation*/
+        };
       } else {
         AddOnStoreSearchView searchView = new AddOnStoreSearchView(getActivity(), null);
         searchView.setTag(getMarketSearchKeyword());
@@ -373,7 +436,7 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
     @Override
     @SuppressWarnings("unchecked")
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-      if (getItemViewType(position) == 0) {
+      if (getItemViewType(position) == VIEW_TYPE_ADD_ON) {
         E addOn = mAllAddOns.get(position);
         ((KeyboardAddOnViewHolder) holder).bindToAddOn(addOn);
       }
@@ -381,17 +444,20 @@ public abstract class AbstractAddOnsBrowserFragment<E extends AddOn> extends Fra
 
     @Override
     public int getItemViewType(int position) {
-      if (position == mAllAddOns.size()) {
-        return 1;
+      if (position < mAllAddOns.size()) {
+        return VIEW_TYPE_ADD_ON;
+      } else if (position == mAllAddOns.size() && canCreateAddOns()) {
+        return VIEW_TYPE_CREATE;
       } else {
-        return 0;
+        return VIEW_TYPE_MARKET;
       }
     }
 
     @Override
     public int getItemCount() {
-      final int extra = getMarketSearchKeyword() != null ? 1 : 0;
-      return mAllAddOns.size() + extra;
+      return mAllAddOns.size()
+          + (canCreateAddOns() ? 1 : 0)
+          + (getMarketSearchKeyword() != null ? 1 : 0);
     }
   }
 }

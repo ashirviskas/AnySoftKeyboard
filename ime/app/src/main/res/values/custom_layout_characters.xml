@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The characters the layout editor offers as keys, the everyday ones first. The two arrays go
+         together: a group's name, and its characters. -->
+    <string-array name="custom_layout_character_groups">
+        <item>Punctuation</item>
+        <item>Digits</item>
+        <item>Symbols</item>
+        <item>Chinese punctuation</item>
+        <item>Currency</item>
+        <item>Math</item>
+        <item>Arrows and marks</item>
+        <item>Letters with accents</item>
+    </string-array>
+    <string-array name="custom_layout_characters" translatable="false">
+        <item>.,?!\'\"-:;/()</item>
+        <item>0123456789</item>
+        <item>\@#&amp;*_+=%~^|\\&lt;&gt;[]{}`…—–·•</item>
+        <item>，。？！、；：「」『』（）《》〈〉…～·—</item>
+        <item>$€£¥₩₹₽¢฿₺₴₪</item>
+        <item>×÷±≠≈≤≥∞√π°′″µ‰¼½¾</item>
+        <item>←→↑↓↔⇧⇥⏎✓✗★☆♥♪§¶©®™¿¡«»„“”‘’</item>
+        <item>àáâãäåāæçćčďèéêëēęěìíîïīłñńňòóôõöøōœřśšßťùúûüūůýÿźżžÀÁÂÄÅÆÇÉÈÊËÍÎÏÑÓÔÖØÚÛÜŠŽ</item>
+    </string-array>
+</resources>

@@ -63,6 +63,11 @@ public class DemoAnyKeyboardView extends AnyKeyboardView {
     super.onDraw(canvas);
   }
 
+  /** How much smaller than the keyboard it shows this view draws itself. */
+  protected float getKeyboardScale() {
+    return mKeyboardScale;
+  }
+
   @Override
   public boolean onTouchEvent(@NonNull MotionEvent me) {
     // not handling ANY touch event.

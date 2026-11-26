@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="custom_layout_accent">#0B7A75</color>
+    <color name="custom_layout_accent_tint">#140B7A75</color>
+    <color name="custom_layout_text">#1B2330</color>
+    <color name="custom_layout_muted">#5B6676</color>
+    <color name="custom_layout_line">#D5DBE3</color>
+</resources>

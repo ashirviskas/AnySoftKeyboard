@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.content.res.XmlResourceParser;
+import android.graphics.Rect;
 import android.text.TextUtils;
 import android.util.Xml;
 import android.view.inputmethod.EditorInfo;
@@ -72,6 +73,10 @@ public abstract class AnyKeyboard extends Keyboard {
   private KeyboardCondenser mKeyboardCondenser;
   private final boolean mSupportsGestureTyping;
 
+  @Nullable private CustomLayout mCustomLayout;
+  private Rect[][] mCustomLayoutSlots = new Rect[0][];
+  private List<Integer> mCustomLayoutKeyChoices = Collections.emptyList();
+
   // for popup keyboard
   // note: the context can be from a different package!
   protected AnyKeyboard(
@@ -122,8 +127,90 @@ public abstract class AnyKeyboard extends Keyboard {
     super.loadKeyboard(keyboardDimens);
 
     addGenericRows(keyboardDimens, topRowPlugin, bottomRowPlugin);
+    if (mCustomLayout != null) applyCustomLayout(mCustomLayout, keyboardDimens);
     initKeysMembers(mLocalContext, keyboardDimens);
     fixEdgeFlags();
+  }
+
+  /**
+   * Makes this keyboard show its keys as {@code layout} says, instead of as its XML and the generic
+   * rows do. Call before {@link #loadKeyboard}.
+   */
+  void setCustomLayout(@Nullable CustomLayout layout) {
+    mCustomLayout = layout;
+  }
+
+  @Nullable
+  public CustomLayout getCustomLayout() {
+    return mCustomLayout;
+  }
+
+  /**
+   * Where each entry of the custom layout is on this keyboard, indexed as the layout's rows and
+   * keys. Empty without a custom layout.
+   */
+  @NonNull
+  public Rect[][] getCustomLayoutSlots() {
+    return mCustomLayoutSlots;
+  }
+
+  /**
+   * The codes of the keys a custom layout of this keyboard is made from: the keys of the keyboard
+   * it is based on (generic rows included), then the usual function keys.
+   */
+  @NonNull
+  public List<Integer> getCustomLayoutKeyChoices() {
+    return mCustomLayoutKeyChoices;
+  }
+
+  private void applyCustomLayout(@NonNull CustomLayout layout, KeyboardDimens keyboardDimens) {
+    final List<Key> available = new ArrayList<>(getKeys());
+    final KeyboardExtension usualKeys =
+        new KeyboardExtension(
+            mLocalContext,
+            mLocalContext,
+            mLocalContext
+                .getResources()
+                .getInteger(com.anysoftkeyboard.api.R.integer.anysoftkeyboard_api_version_code),
+            "custom_layout_usual_keys",
+            "",
+            R.xml.custom_layout_usual_keys,
+            KeyboardExtension.TYPE_BOTTOM,
+            "",
+            true,
+            0);
+    available.addAll(
+        new GenericRowKeyboard(
+                usualKeys,
+                mLocalContext,
+                keyboardDimens,
+                isAlphabetKeyboard(),
+                KEYBOARD_ROW_MODE_NORMAL)
+            .getKeys());
+
+    mCustomLayoutKeyChoices = new ArrayList<>();
+    for (Key key : available) {
+      final int code = key.getPrimaryCode();
+      if (code != KeyCodes.DISABLED && !mCustomLayoutKeyChoices.contains(code)) {
+        mCustomLayoutKeyChoices.add(code);
+      }
+    }
+
+    getKeys().clear();
+    mCustomLayoutSlots =
+        KeyboardLayoutArranger.arrange(
+            layout,
+            available,
+            getKeys(),
+            new Row(this),
+            keyboardDimens,
+            mDisplayWidth,
+            keyboardDimens.getNormalKeyHeight() * mKeysHeightFactor,
+            mKeyboardMode);
+    // the generic rows are among the placed keys now
+    mGenericRowsHeight = 0;
+    mMaxGenericRowsWidth = 0;
+    resetDimensions();
   }
 
   private void fixEdgeFlags() {
@@ -785,6 +872,44 @@ public abstract class AnyKeyboard extends Keyboard {
       super(row, keyboardDimens);
     }
 
+    /** A second key that looks and types like {@code other}. */
+    AnyKey(AnyKey other, Row row, KeyboardDimens keyboardDimens) {
+      super(row, keyboardDimens);
+      mCodes = other.mCodes;
+      mShiftedCodes = other.mShiftedCodes;
+      mShiftCodesAlways = other.mShiftCodesAlways;
+      mFunctionalKey = other.mFunctionalKey;
+      mEnabled = true;
+      label = other.label;
+      shiftedKeyLabel = other.shiftedKeyLabel;
+      hintLabel = other.hintLabel;
+      icon = other.icon;
+      iconPreview = other.iconPreview;
+      text = other.text;
+      shiftedText = other.shiftedText;
+      typedText = other.typedText;
+      shiftedTypedText = other.shiftedTypedText;
+      popupCharacters = other.popupCharacters;
+      popupResId = other.popupResId;
+      externalResourcePopupLayout = other.externalResourcePopupLayout;
+      longPressCode = other.longPressCode;
+      repeatable = other.repeatable;
+      modifier = other.modifier;
+      showPreview = other.showPreview;
+      dynamicEmblem = other.dynamicEmblem;
+      showKeyInLayout = other.showKeyInLayout;
+    }
+
+    /** A plain key that types one character. */
+    AnyKey(Row row, KeyboardDimens keyboardDimens, int code) {
+      super(row, keyboardDimens);
+      mCodes = new int[] {code};
+      mShiftedCodes = new int[] {Character.toUpperCase(code)};
+      mShiftCodesAlways = Character.isLetter(code);
+      label = new String(Character.toChars(code));
+      mEnabled = true;
+    }
+
     public AnyKey(
         @NonNull AddOn.AddOnResourceMapping resourceMapping,
         Context keyboardContext,
@@ -962,7 +1087,7 @@ public abstract class AnyKeyboard extends Keyboard {
 
   private static class EnterKey extends AnyKey {
 
-    private final int mOriginalHeight;
+    private int mOriginalHeight;
 
     public EnterKey(
         @NonNull AddOn.AddOnResourceMapping resourceMapping,
@@ -974,6 +1099,12 @@ public abstract class AnyKeyboard extends Keyboard {
         XmlResourceParser parser) {
       super(resourceMapping, keyboardContext, parent, keyboardDimens, x, y, parser);
       mOriginalHeight = this.height;
+    }
+
+    @Override
+    void setBounds(int x, int y, int width, int height) {
+      super.setBounds(x, y, width, height);
+      mOriginalHeight = height;
     }
 
     @Override

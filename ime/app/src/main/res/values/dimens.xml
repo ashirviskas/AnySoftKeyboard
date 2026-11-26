@@ -94,4 +94,5 @@
     <dimen name="extension_keyboard_reveal_point">-10dp</dimen>
     <dimen name="dismiss_keyboard_point">5dp</dimen>
     <dimen name="navigation_bar_min_height">40dp</dimen>
+    <dimen name="custom_layout_create_card_height">96dp</dimen>
 </resources>

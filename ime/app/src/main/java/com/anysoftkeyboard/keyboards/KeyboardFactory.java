@@ -17,15 +17,21 @@
 package com.anysoftkeyboard.keyboards;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import com.anysoftkeyboard.addons.AddOn;
 import com.anysoftkeyboard.addons.AddOnsFactory;
 import com.anysoftkeyboard.base.utils.Logger;
 import com.anysoftkeyboard.prefs.DirectBootAwareSharedPreferences;
 import com.menny.android.anysoftkeyboard.BuildConfig;
 import com.menny.android.anysoftkeyboard.R;
+import java.util.ArrayList;
+import java.util.List;
+import org.json.JSONArray;
+import org.json.JSONException;
 
 public class KeyboardFactory extends AddOnsFactory.MultipleAddOnsFactory<KeyboardAddOnAndBuilder> {
   private static final String TAG = "ASKKeyboardFactory";
@@ -45,10 +51,21 @@ public class KeyboardFactory extends AddOnsFactory.MultipleAddOnsFactory<Keyboar
   private static final String XML_RADICAL_CANDIDATE_SELECTOR_KEYS_ATTRIBUTE =
       "radicalCandidateSelectorKeys";
   private static final String XML_PHONETIC_LAYOUT_ATTRIBUTE = "phoneticLayout";
+  private static final String XML_VARIANT_OF_ATTRIBUTE = "variantOf";
   private static final String XML_ASCII_ONLY_POPUPS_ATTRIBUTE = "asciiOnlyPopups";
   private static final String XML_SUPPORTS_GESTURE_TYPING_ATTRIBUTE = "supportsGestureTyping";
   private static final String XML_DEFAULT_ATTRIBUTE = "defaultEnabled";
   public static final String PREF_ID_PREFIX = "keyboard_";
+
+  // Starts with PREF_ID_PREFIX, so the keyboards are rebuilt when it changes.
+  private static final String CUSTOM_LAYOUTS_PREF = PREF_ID_PREFIX + "custom_layouts";
+
+  // The custom layouts are also written from outside this class (restoring a backup). A field,
+  // since the preferences hold their listeners weakly.
+  private final SharedPreferences.OnSharedPreferenceChangeListener mCustomLayoutsChangedListener =
+      (preferences, key) -> {
+        if (CUSTOM_LAYOUTS_PREF.equals(key)) clearAddOnList();
+      };
 
   public KeyboardFactory(@NonNull Context context) {
     super(
@@ -64,6 +81,7 @@ public class KeyboardFactory extends AddOnsFactory.MultipleAddOnsFactory<Keyboar
         R.string.settings_default_keyboard_id,
         true,
         BuildConfig.TESTING_BUILD);
+    mSharedPreferences.registerOnSharedPreferenceChangeListener(mCustomLayoutsChangedListener);
   }
 
   @Override
@@ -101,6 +119,8 @@ public class KeyboardFactory extends AddOnsFactory.MultipleAddOnsFactory<Keyboar
     final String radicalCandidateSelectorKeys =
         attrs.getAttributeValue(null, XML_RADICAL_CANDIDATE_SELECTOR_KEYS_ATTRIBUTE);
     final String phoneticLayout = attrs.getAttributeValue(null, XML_PHONETIC_LAYOUT_ATTRIBUTE);
+    final CharSequence variantOf =
+        getTextFromResourceOrText(context, attrs, XML_VARIANT_OF_ATTRIBUTE);
     final boolean asciiOnlyPopups =
         attrs.getAttributeBooleanValue(null, XML_ASCII_ONLY_POPUPS_ATTRIBUTE, false);
     final boolean supportsGestureTyping =
@@ -154,10 +174,92 @@ public class KeyboardFactory extends AddOnsFactory.MultipleAddOnsFactory<Keyboar
           radicalKeyCharacters,
           radicalCandidateSelectorKeys,
           phoneticLayout,
+          variantOf == null ? null : variantOf.toString(),
           asciiOnlyPopups,
           supportsGestureTyping,
           keyboardDefault);
     }
+  }
+
+  /** The layouts the user made. Each of them is also a keyboard add-on of this factory. */
+  @NonNull
+  public List<CustomLayout> getCustomLayouts() {
+    final List<CustomLayout> layouts = new ArrayList<>();
+    try {
+      final JSONArray json = new JSONArray(mSharedPreferences.getString(CUSTOM_LAYOUTS_PREF, "[]"));
+      for (int i = 0; i < json.length(); i++) {
+        layouts.add(CustomLayout.fromJson(json.getJSONObject(i)));
+      }
+    } catch (JSONException e) {
+      Logger.w(TAG, e, "Failed to read the custom layouts.");
+    }
+    return layouts;
+  }
+
+  @Nullable
+  public CustomLayout getCustomLayout(@NonNull String id) {
+    for (CustomLayout layout : getCustomLayouts()) {
+      if (layout.id.equals(id)) return layout;
+    }
+    return null;
+  }
+
+  /** Stores {@code layout}, in place of the stored one with the same id if there is one. */
+  public void saveCustomLayout(@NonNull CustomLayout layout) {
+    final List<CustomLayout> layouts = getCustomLayouts();
+    int index = 0;
+    while (index < layouts.size() && !layouts.get(index).id.equals(layout.id)) index++;
+    if (index < layouts.size()) layouts.set(index, layout);
+    else layouts.add(layout);
+    storeCustomLayouts(layouts);
+  }
+
+  public void deleteCustomLayout(@NonNull String id) {
+    final List<CustomLayout> layouts = getCustomLayouts();
+    for (int index = layouts.size() - 1; index >= 0; index--) {
+      if (layouts.get(index).id.equals(id)) layouts.remove(index);
+    }
+    storeCustomLayouts(layouts);
+  }
+
+  private void storeCustomLayouts(List<CustomLayout> layouts) {
+    final JSONArray json = new JSONArray();
+    try {
+      for (CustomLayout layout : layouts) json.put(layout.toJson());
+    } catch (JSONException e) {
+      throw new IllegalStateException(e);
+    }
+    mSharedPreferences.edit().putString(CUSTOM_LAYOUTS_PREF, json.toString()).apply();
+    // not left to the listener, which may be told later
+    clearAddOnList();
+  }
+
+  @NonNull
+  @Override
+  protected List<KeyboardAddOnAndBuilder> createDerivedAddOns() {
+    final List<KeyboardAddOnAndBuilder> addOns = new ArrayList<>();
+    for (CustomLayout layout : getCustomLayouts()) {
+      // a layout whose keyboard is not installed (anymore) stays stored and is not offered
+      final KeyboardAddOnAndBuilder base = getAddOnById(layout.baseId);
+      final KeyboardAddOnAndBuilder addOn =
+          base == null ? null : base.withLayout(layout, base.getSortIndex());
+      if (addOn != null) addOns.add(addOn);
+    }
+    return addOns;
+  }
+
+  /**
+   * The keyboards that are layouts of the keyboard {@code groupId} (see {@link
+   * KeyboardAddOnAndBuilder#getLayoutGroupId}): itself, its variants and the user's layouts of
+   * them.
+   */
+  @NonNull
+  public List<KeyboardAddOnAndBuilder> getLayoutsOf(@NonNull String groupId) {
+    final List<KeyboardAddOnAndBuilder> layouts = new ArrayList<>();
+    for (KeyboardAddOnAndBuilder addOn : getAllAddOns()) {
+      if (addOn.getLayoutGroupId().equals(groupId)) layouts.add(addOn);
+    }
+    return layouts;
   }
 
   public boolean hasMultipleAlphabets() {

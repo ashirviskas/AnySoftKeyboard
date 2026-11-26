@@ -155,11 +155,29 @@
         android:id="@+id/keyboardAddOnBrowserFragment"
         android:name="com.anysoftkeyboard.ui.settings.KeyboardAddOnBrowserFragment"
         android:label="KeyboardAddOnBrowserFragment">
+        <action
+            android:id="@+id/action_keyboardAddOnBrowserFragment_self"
+            app:destination="@id/keyboardAddOnBrowserFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
+            android:id="@+id/action_keyboardAddOnBrowserFragment_to_customLayoutEditorFragment"
+            app:destination="@id/customLayoutEditorFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
         <deepLink
             android:id="@+id/deepLink4"
             app:action="android.intent.action.VIEW"
             app:uri="@string/deeplink_url_keyboards" />
     </fragment>
+    <fragment
+        android:id="@+id/customLayoutEditorFragment"
+        android:name="com.anysoftkeyboard.ui.settings.CustomLayoutEditorFragment"
+        android:label="CustomLayoutEditorFragment" />
     <fragment
         android:id="@+id/dictionariesFragment"
         android:name="com.anysoftkeyboard.ui.settings.DictionariesFragment"

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The function keys a custom layout can use, whatever keyboard it is based on. This is not a
+    row that is shown: a custom layout takes single keys out of it by their code (see
+    KeyboardLayoutArranger). The order is the order the layout editor offers them in.
+-->
+<Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:ask="http://schemas.android.com/apk/res-auto"
+    android:keyWidth="10%p">
+    <Row>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_space"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_enter"
+             ask:longPressCode="@integer/key_code_settings"/>
+        <Key android:codes="@integer/key_code_delete" android:isRepeatable="true"/>
+        <Key android:codes="@integer/key_code_shift" android:isModifier="true"/>
+        <Key android:codes="@integer/key_code_keyboard_mode_change"/>
+        <Key android:codes="@integer/key_code_mode_alphabet"
+             ask:longPressCode="@integer/key_code_mode_alphabet_popup"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_quick_text"
+             ask:longPressCode="@integer/key_code_quick_text_popup"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_voice_input"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_arrow_left" android:isRepeatable="true"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_arrow_right" android:isRepeatable="true"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_arrow_up" android:isRepeatable="true"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_arrow_down" android:isRepeatable="true"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_move_home"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_move_end"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_tab"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_forward_delete" android:isRepeatable="true"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_clipboard_copy"
+             ask:longPressCode="@integer/key_code_clipboard_cut"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_clipboard_paste"
+             ask:longPressCode="@integer/key_code_clipboard_paste_popup"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_clipboard_select"
+             ask:longPressCode="@integer/key_code_clipboard_select_all"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_undo"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_redo"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_ctrl"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_domain"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_settings"/>
+        <Key ask:isFunctional="true" android:codes="@integer/key_code_cancel"/>
+    </Row>
+</Keyboard>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The layout editor: quiet list rows, small labels, one accent colour. -->
+    <style name="CustomLayout" />
+
+    <style name="CustomLayout.Text">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/custom_layout_text</item>
+    </style>
+
+    <style name="CustomLayout.Text.Small">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/custom_layout_muted</item>
+    </style>
+
+    <style name="CustomLayout.Text.Section">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/custom_layout_muted</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingTop">10dp</item>
+    </style>
+
+    <style name="CustomLayout.Link">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/custom_layout_accent</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:paddingTop">10dp</item>
+        <item name="android:paddingBottom">10dp</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">4dp</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+
+    <style name="CustomLayout.Chip">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/custom_layout_text</item>
+        <item name="android:background">@drawable/custom_layout_chip</item>
+        <item name="android:minWidth">36dp</item>
+        <item name="android:minHeight">32dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">10dp</item>
+        <item name="android:paddingEnd">10dp</item>
+    </style>
+
+    <style name="CustomLayout.Divider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:background">@color/custom_layout_line</item>
+    </style>
+</resources>

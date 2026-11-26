@@ -359,6 +359,10 @@ public abstract class AddOnsFactory<E extends AddOn> {
     for (E addOn : mAddOns) {
       mAddOnsById.put(addOn.getId(), addOn);
     }
+    for (E addOn : createDerivedAddOns()) {
+      mAddOns.add(addOn);
+      mAddOnsById.put(addOn.getId(), addOn);
+    }
     // removing hidden addons from global list, so hidden addons exist only in the mapping
     for (E addOn : mAddOnsById.values()) {
       if (addOn instanceof AddOnImpl && ((AddOnImpl) addOn).isHiddenAddon()) {
@@ -370,6 +374,15 @@ public abstract class AddOnsFactory<E extends AddOn> {
     // sort order (from minimum to maximum)
     Collections.sort(mAddOns, new AddOnsComparator(mContext.getPackageName()));
     Logger.d(mTag, "Have %d add on for %s (after sort)", mAddOns.size(), getClass().getName());
+  }
+
+  /**
+   * Add-ons that are not read from a package but made out of the loaded ones (which {@link
+   * #getAddOnById} already returns when this is called).
+   */
+  @NonNull
+  protected List<E> createDerivedAddOns() {
+    return Collections.emptyList();
   }
 
   private List<E> getExternalAddOns() {
