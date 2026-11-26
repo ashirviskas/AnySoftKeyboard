@@ -1074,4 +1074,22 @@
     <string name="custom_layout_height_compact">compact</string>
     <string name="custom_layout_height_normal">normal</string>
     <string name="custom_layout_height_tall">tall</string>
+    <string name="custom_layout_field_text">Text</string>
+    <string name="custom_layout_field_chat">Chat</string>
+    <string name="custom_layout_field_url">Web address</string>
+    <string name="custom_layout_field_email">Email</string>
+    <string name="custom_layout_field_password">Password</string>
+    <string name="custom_layout_shape_whole">Whole</string>
+    <string name="custom_layout_shape_split">Split</string>
+    <string name="custom_layout_shape_left">To the left</string>
+    <string name="custom_layout_shape_right">To the right</string>
+    <string name="custom_layout_preview_look_only">Shown as on a screen turned on its side, for looking only. Pick Whole to work on the keys.</string>
+    <string name="custom_layout_no_rows_for_field">No row is shown in %1$s fields</string>
+    <string name="custom_layout_row_fields">Show this row in</string>
+    <string name="custom_layout_row_fields_hint">A row for some fields only gives those fields keys of their own. Duplicate a row, keep one for web addresses and the other for the rest. The chips over the keyboard show each field.</string>
+    <string name="custom_layout_row_for_fields">%1$s · %2$s</string>
+    <string name="custom_layout_duplicate_row">Duplicate row</string>
+    <string name="custom_layout_move_row_up">Move up</string>
+    <string name="custom_layout_move_row_down">Move down</string>
+    <string name="custom_layout_missing_keys_in_field">In %1$s fields this keyboard has no Space, Enter or Backspace. Add them, or show a row that has them there.</string>
 </resources>

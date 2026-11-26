@@ -469,4 +469,51 @@ public class CustomLayoutTest {
     Assert.assertNull(mFactory.getAddOnById("layout-orphan"));
     Assert.assertNotNull(mFactory.getCustomLayout("layout-orphan"));
   }
+
+  @Test
+  public void testARowCanBeForSomeFieldsOnly() throws Exception {
+    final CustomLayout layout = captureEnglish();
+    final int rows = layout.rows.size();
+    // a second bottom row, for web addresses; the first one for everything else
+    final CustomLayout.Row forUrl = layout.rows.get(rows - 1).copy();
+    forUrl.fields = 1 << Keyboard.KEYBOARD_ROW_MODE_URL;
+    forUrl.keys.set(0, new CustomLayout.Key('~', forUrl.keys.get(0).width));
+    layout.rows.get(rows - 1).setShownIn(Keyboard.KEYBOARD_ROW_MODE_URL, false);
+    layout.rows.add(forUrl);
+    Assert.assertTrue(layout.rows.get(rows - 1).showsIn(Keyboard.KEYBOARD_ROW_MODE_EMAIL));
+    Assert.assertFalse(layout.rows.get(rows - 1).showsIn(Keyboard.KEYBOARD_ROW_MODE_URL));
+    Assert.assertEquals(
+        layout.totalHeight(Keyboard.KEYBOARD_ROW_MODE_NORMAL),
+        layout.totalHeight(Keyboard.KEYBOARD_ROW_MODE_URL),
+        0.001f);
+    Assert.assertTrue(layout.contains('~', Keyboard.KEYBOARD_ROW_MODE_URL));
+    Assert.assertFalse(layout.contains('~', Keyboard.KEYBOARD_ROW_MODE_NORMAL));
+
+    final AnyKeyboard normal = load(mEnglish.withLayout(layout, 1));
+    final AnyKeyboard url = load(mEnglish.withLayout(layout, 1), Keyboard.KEYBOARD_ROW_MODE_URL);
+    Assert.assertNull(findKey(normal, '~'));
+    Assert.assertNotNull(findKey(url, '~'));
+    Assert.assertEquals(normal.getHeight(), url.getHeight());
+    Assert.assertEquals(findKey(normal, KeyCodes.SPACE).y, findKey(url, '~').y);
+    // a row that is left out has no places; the others keep theirs
+    Assert.assertEquals(0, normal.getCustomLayoutSlots()[rows].length);
+    Assert.assertEquals(0, url.getCustomLayoutSlots()[rows - 1].length);
+    Assert.assertEquals(forUrl.keys.size(), url.getCustomLayoutSlots()[rows].length);
+    // a row made for the field is not given the / key by itself
+    Assert.assertNull(findKey(url, '/'));
+
+    final CustomLayout read = CustomLayout.fromJson(new JSONObject(layout.toJson().toString()));
+    Assert.assertEquals(forUrl.fields, read.rows.get(rows).fields);
+    Assert.assertEquals(layout.rows.get(rows - 1).fields, read.rows.get(rows - 1).fields);
+    Assert.assertEquals(CustomLayout.ALL_FIELDS, read.rows.get(0).fields);
+    Assert.assertFalse(layout.toJson().getJSONArray("rows").getJSONObject(0).has("fields"));
+  }
+
+  @Test
+  public void testARowStaysInOneFieldAtLeast() {
+    final CustomLayout.Row row = row(50, 50);
+    for (int field : CustomLayout.FIELDS) row.setShownIn(field, false);
+    Assert.assertNotEquals(0, row.fields);
+    Assert.assertTrue(row.showsIn(Keyboard.KEYBOARD_ROW_MODE_PASSWORD));
+  }
 }

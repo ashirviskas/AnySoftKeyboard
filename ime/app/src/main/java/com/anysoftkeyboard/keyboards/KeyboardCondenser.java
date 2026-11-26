@@ -56,10 +56,6 @@ public class KeyboardCondenser {
   }
 
   public boolean setCondensedKeys(CondenseType condenseType, KeyboardDimens keyboardDimens) {
-    if (mKeyboardCondenseType.equals(condenseType)) {
-      return false; // not changed
-    }
-
     final float condensingFactor;
     switch (condenseType) {
       case CompactToLeft:
@@ -69,6 +65,18 @@ public class KeyboardCondenser {
       default:
         condensingFactor = mCondensingFullFactor;
         break;
+    }
+    return setCondensedKeys(condenseType, keyboardDimens, condensingFactor);
+  }
+
+  /**
+   * As {@link #setCondensedKeys(CondenseType, KeyboardDimens)}, with the part of the width the keys
+   * are squeezed into given by the caller instead of taken from this screen's resources.
+   */
+  public boolean setCondensedKeys(
+      CondenseType condenseType, KeyboardDimens keyboardDimens, float condensingFactor) {
+    if (mKeyboardCondenseType.equals(condenseType)) {
+      return false; // not changed
     }
 
     if (!condenseType.equals(CondenseType.None) && condensingFactor > 0.97f) {

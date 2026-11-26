@@ -12,11 +12,45 @@
     android:focusableInTouchMode="true"
     android:orientation="vertical">
 
-    <!-- first: on top. The fragment moves it to the end when the user wants it at the bottom. -->
-    <com.anysoftkeyboard.keyboards.views.CustomLayoutEditorView
-        android:id="@+id/custom_layout_keyboard"
+    <!--
+        The keyboard, and over it what it is shown as (the kind of field; whole or split).
+        First: on top. The fragment moves it to the end when the user wants it at the bottom.
+    -->
+    <LinearLayout
+        android:id="@+id/custom_layout_preview"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/custom_layout_preview_setups"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="6dp" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/custom_layout_preview_hint"
+            style="@style/CustomLayout.Text.Small"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="6dp"
+            android:text="@string/custom_layout_preview_look_only"
+            android:visibility="gone" />
+
+        <com.anysoftkeyboard.keyboards.views.CustomLayoutEditorView
+            android:id="@+id/custom_layout_keyboard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/custom_layout_tabs"
@@ -439,12 +473,59 @@
                             android:text="@string/custom_layout_add_row" />
 
                         <TextView
+                            android:id="@+id/custom_layout_duplicate_row"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_duplicate_row" />
+
+                        <TextView
+                            android:id="@+id/custom_layout_move_row_up"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_move_row_up" />
+
+                        <TextView
+                            android:id="@+id/custom_layout_move_row_down"
+                            style="@style/CustomLayout.Link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/custom_layout_move_row_down" />
+
+                        <TextView
                             android:id="@+id/custom_layout_remove_row"
                             style="@style/CustomLayout.Link"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content" />
                     </LinearLayout>
                 </HorizontalScrollView>
+
+                <View style="@style/CustomLayout.Divider" />
+
+                <!-- the kinds of field the row is part of the keyboard for -->
+                <TextView
+                    style="@style/CustomLayout.Text.Section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/custom_layout_row_fields" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/custom_layout_row_fields"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp"
+                    app:chipSpacingHorizontal="6dp"
+                    app:chipSpacingVertical="6dp" />
+
+                <TextView
+                    style="@style/CustomLayout.Text.Small"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingBottom="12dp"
+                    android:text="@string/custom_layout_row_fields_hint" />
             </LinearLayout>
 
             <!-- Keyboard: its name, its height as a whole, and the layout as something to share -->

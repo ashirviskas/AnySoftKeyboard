@@ -50,6 +50,7 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
 
   @Nullable private Listener mListener;
   private boolean mEditable;
+  private boolean mLookOnly;
   private int mSelectedRow = NOTHING;
   // sorted; several only while picking several is on
   private final TreeSet<Integer> mSelectedKeys = new TreeSet<>();
@@ -83,6 +84,15 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
   /** Whether keys can be dragged and resized; otherwise touches only pick. */
   public void setEditable(boolean editable) {
     mEditable = editable;
+    invalidate();
+  }
+
+  /**
+   * While on, the keyboard is only shown: touches do nothing and what is picked is not marked. For
+   * keyboards whose keys are not where the layout puts them (split).
+   */
+  public void setLookOnly(boolean lookOnly) {
+    mLookOnly = lookOnly;
     invalidate();
   }
 
@@ -194,7 +204,7 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
   @Override
   public boolean onTouchEvent(@NonNull MotionEvent event) {
     final CustomLayout layout = layout();
-    if (layout == null) return false;
+    if (layout == null || mLookOnly) return false;
     final float x = keyboardX(event);
     final float y = keyboardY(event);
     switch (event.getActionMasked()) {
@@ -293,7 +303,7 @@ public class CustomLayoutEditorView extends DemoAnyKeyboardView {
     super.onDraw(canvas);
     final Rect[][] slots = slots();
     final CustomLayout layout = layout();
-    if (layout == null || slots.length != layout.rows.size()) return;
+    if (layout == null || mLookOnly || slots.length != layout.rows.size()) return;
 
     canvas.save();
     canvas.translate(getPaddingLeft(), getPaddingTop());

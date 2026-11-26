@@ -4,6 +4,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.ContextThemeWrapper;
@@ -32,6 +33,7 @@ import androidx.navigation.Navigation;
 import androidx.preference.PreferenceManager;
 import com.anysoftkeyboard.api.KeyCodes;
 import com.anysoftkeyboard.keyboards.AnyKeyboard;
+import com.anysoftkeyboard.keyboards.CondenseType;
 import com.anysoftkeyboard.keyboards.CustomLayout;
 import com.anysoftkeyboard.keyboards.Keyboard;
 import com.anysoftkeyboard.keyboards.KeyboardAddOnAndBuilder;
@@ -58,9 +60,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Lets the user arrange a keyboard of their own: which keys are where and how wide (Keys tab), and
- * how tall each row is (Size tab). The result is stored as a {@link CustomLayout} and shows up as
- * one more keyboard.
+ * Lets the user arrange a keyboard of their own. The keyboard is shown whole and is what the user
+ * works on; the tabs are named after what is changed: a key (which one, where, how wide), a row
+ * (height, side gaps, the fields it is shown for) or the whole keyboard (name, heights, sharing).
+ * The keyboard can be looked at as it is for each kind of field, and split. The result is stored as
+ * a {@link CustomLayout} and shows up as one more keyboard.
  */
 public class CustomLayoutEditorFragment extends Fragment
     implements CustomLayoutEditorView.Listener {
@@ -93,6 +97,27 @@ public class CustomLayoutEditorFragment extends Fragment
     R.string.custom_layout_height_tall
   };
 
+  /** The names of {@link CustomLayout#FIELDS}. */
+  private static final int[] FIELD_NAMES = {
+    R.string.custom_layout_field_text,
+    R.string.custom_layout_field_chat,
+    R.string.custom_layout_field_url,
+    R.string.custom_layout_field_email,
+    R.string.custom_layout_field_password
+  };
+
+  /** The ways the keys can be squeezed that the keyboard can be looked at in. */
+  private static final CondenseType[] SHAPES = {
+    CondenseType.None, CondenseType.Split, CondenseType.CompactToLeft, CondenseType.CompactToRight
+  };
+
+  private static final int[] SHAPE_NAMES = {
+    R.string.custom_layout_shape_whole,
+    R.string.custom_layout_shape_split,
+    R.string.custom_layout_shape_left,
+    R.string.custom_layout_shape_right
+  };
+
   /** In the row list of the Size tab: the entry that stands for every row but the bottom one. */
   private static final int ALL_LETTER_ROWS = -2;
 
@@ -114,6 +139,11 @@ public class CustomLayoutEditorFragment extends Fragment
   private SeekBar mKeyWidth;
   private LinearLayout mSizeRows;
   private LinearLayout mRowHeight;
+  private LinearLayout mPreviewSetups;
+
+  // what the keyboard is shown as: for which kind of field, and whole or squeezed
+  @Keyboard.KeyboardRowModeId private int mPreviewField = Keyboard.KEYBOARD_ROW_MODE_NORMAL;
+  private CondenseType mPreviewShape = CondenseType.None;
 
   // the tab that is shown, and what was picked when the Key and Row tabs were left, to come back to
   private int mShownTab = TAB_KEY;
@@ -155,6 +185,7 @@ public class CustomLayoutEditorFragment extends Fragment
     mRowHeight = view.findViewById(R.id.custom_layout_row_height);
     mKeyboardView = view.findViewById(R.id.custom_layout_keyboard);
     mKeyboardView.setListener(this);
+    mPreviewSetups = view.findViewById(R.id.custom_layout_preview_setups);
     mSelectionHintView = view.findViewById(R.id.custom_layout_selection_hint);
     mUsualKeys = view.findViewById(R.id.custom_layout_usual_keys);
     mKeyboardKeys = view.findViewById(R.id.custom_layout_keyboard_keys);
@@ -211,6 +242,9 @@ public class CustomLayoutEditorFragment extends Fragment
         .setOnClickListener(v -> mTabs.selectTab(mTabs.getTabAt(TAB_ROW)));
     view.findViewById(R.id.custom_layout_row_up).setOnClickListener(v -> stepRow(-1));
     view.findViewById(R.id.custom_layout_row_down).setOnClickListener(v -> stepRow(1));
+    view.findViewById(R.id.custom_layout_duplicate_row).setOnClickListener(v -> duplicateRow());
+    view.findViewById(R.id.custom_layout_move_row_up).setOnClickListener(v -> moveRow(-1));
+    view.findViewById(R.id.custom_layout_move_row_down).setOnClickListener(v -> moveRow(1));
     for (int action :
         new int[] {
           R.id.custom_layout_copy,
@@ -222,6 +256,7 @@ public class CustomLayoutEditorFragment extends Fragment
       view.findViewById(action).setOnClickListener(v -> perform(action));
     }
     showPreviewPlace();
+    showPreviewSetups();
     mSideGaps = view.findViewById(R.id.custom_layout_side_gaps);
     mSideGaps.setMax(Math.round(MAX_SIDE_GAP / SIDE_GAP_STEP));
     mSideGaps.setOnSeekBarChangeListener(
@@ -307,9 +342,153 @@ public class CustomLayoutEditorFragment extends Fragment
 
   @NonNull
   private AnyKeyboard load(@NonNull KeyboardAddOnAndBuilder addOn) {
-    final AnyKeyboard keyboard = addOn.createKeyboard(Keyboard.KEYBOARD_ROW_MODE_NORMAL);
+    return load(addOn, Keyboard.KEYBOARD_ROW_MODE_NORMAL);
+  }
+
+  @NonNull
+  private AnyKeyboard load(
+      @NonNull KeyboardAddOnAndBuilder addOn, @Keyboard.KeyboardRowModeId int field) {
+    final AnyKeyboard keyboard = addOn.createKeyboard(field);
     keyboard.loadKeyboard(mKeyboardView.getThemedKeyboardDimens());
     return keyboard;
+  }
+
+  // ---- what the keyboard is shown as ----
+
+  /**
+   * Shows the layout on the keyboard, as it is for the picked kind of field. Squeezed (split, to a
+   * side) it is only looked at: the keys are then not where the layout puts them.
+   */
+  private void showKeyboard() {
+    final AnyKeyboard keyboard = load(mBase.withLayout(mLayout, 0), mPreviewField);
+    final boolean squeezed = mPreviewShape != CondenseType.None;
+    if (squeezed) keyboard.setCondensedKeys(mPreviewShape, landscapeCondensing(mPreviewShape));
+    mKeyboardView.setLookOnly(squeezed);
+    requireView()
+        .findViewById(R.id.custom_layout_preview_hint)
+        .setVisibility(squeezed ? View.VISIBLE : View.GONE);
+    mKeyboardView.setKeyboard(keyboard, null, null);
+  }
+
+  /**
+   * The part of the width the keys are squeezed into when the screen is on its side. Upright, a
+   * phone does not squeeze them at all, and there would be nothing to see.
+   */
+  private float landscapeCondensing(CondenseType shape) {
+    final Configuration landscape = new Configuration(getResources().getConfiguration());
+    landscape.orientation = Configuration.ORIENTATION_LANDSCAPE;
+    return requireContext()
+            .createConfigurationContext(landscape)
+            .getResources()
+            .getInteger(
+                shape == CondenseType.Split
+                    ? R.integer.condensing_precentage
+                    : R.integer.condensing_precentage_edge)
+        / 100f;
+  }
+
+  /** The choices over the keyboard: the kind of field, then whole or squeezed. */
+  private void showPreviewSetups() {
+    mPreviewSetups.removeAllViews();
+    final int gap = Math.round(6 * getResources().getDisplayMetrics().density);
+    for (int i = 0; i < CustomLayout.FIELDS.length; i++) {
+      final int field = CustomLayout.FIELDS[i];
+      final TextView chip =
+          addChip(
+              mPreviewSetups,
+              getString(FIELD_NAMES[i]),
+              "field:" + field,
+              v -> setPreviewField(field));
+      ((ViewGroup.MarginLayoutParams) chip.getLayoutParams()).setMarginEnd(gap);
+      if (field == mPreviewField) markChip(chip);
+    }
+    for (int i = 0; i < SHAPES.length; i++) {
+      final CondenseType shape = SHAPES[i];
+      final TextView chip =
+          addChip(
+              mPreviewSetups,
+              getString(SHAPE_NAMES[i]),
+              "shape:" + shape,
+              v -> {
+                mPreviewShape = shape;
+                showPreviewSetups();
+                showLayout();
+              });
+      final ViewGroup.MarginLayoutParams params =
+          (ViewGroup.MarginLayoutParams) chip.getLayoutParams();
+      params.setMarginEnd(gap);
+      // a wider gap sets the two groups apart
+      if (i == 0) params.setMarginStart(2 * gap);
+      if (shape == mPreviewShape) markChip(chip);
+    }
+  }
+
+  /** Makes a chip look picked (the look of the keys that are not on the layout yet). */
+  private void markChip(TextView chip) {
+    chip.setTextColor(ContextCompat.getColor(requireContext(), R.color.custom_layout_accent));
+    chip.setBackgroundResource(R.drawable.custom_layout_chip_missing);
+  }
+
+  private void setPreviewField(@Keyboard.KeyboardRowModeId int field) {
+    if (mLayout.totalHeight(field) == 0) {
+      Toast.makeText(
+              requireContext(),
+              getString(R.string.custom_layout_no_rows_for_field, fieldName(field)),
+              Toast.LENGTH_LONG)
+          .show();
+      return;
+    }
+    mPreviewField = field;
+    // what is picked has to be on the keyboard that is shown
+    final int row = selectedRow();
+    if (row != CustomLayoutEditorView.NOTHING && !mLayout.rows.get(row).showsIn(field)) {
+      mKeyboardView.setSelection(
+          mShownTab == TAB_ROW ? lastShownRow() : CustomLayoutEditorView.NOTHING,
+          CustomLayoutEditorView.NOTHING);
+    }
+    showPreviewSetups();
+    showLayout();
+  }
+
+  @NonNull
+  private String fieldName(@Keyboard.KeyboardRowModeId int field) {
+    for (int i = 0; i < CustomLayout.FIELDS.length; i++) {
+      if (CustomLayout.FIELDS[i] == field) return getString(FIELD_NAMES[i]);
+    }
+    throw new IllegalArgumentException("not a field: " + field);
+  }
+
+  /** The names of the fields {@code row} is shown for. */
+  @NonNull
+  private String fieldNames(@NonNull CustomLayout.Row row) {
+    final StringBuilder names = new StringBuilder();
+    for (int field : CustomLayout.FIELDS) {
+      if (!row.showsIn(field)) continue;
+      if (names.length() > 0) names.append(", ");
+      names.append(fieldName(field));
+    }
+    return names.toString();
+  }
+
+  /** The lowest row of the keyboard that is shown. */
+  private int lastShownRow() {
+    for (int row = mLayout.rows.size() - 1; row >= 0; row--) {
+      if (mLayout.rows.get(row).showsIn(mPreviewField)) return row;
+    }
+    return mLayout.rows.size() - 1;
+  }
+
+  /** Shows the keyboard for a field that has {@code rowIndex}, if the shown one does not. */
+  private void showFieldOf(int rowIndex) {
+    final CustomLayout.Row row = mLayout.rows.get(rowIndex);
+    if (row.showsIn(mPreviewField)) return;
+    for (int field : CustomLayout.FIELDS) {
+      if (row.showsIn(field)) {
+        mPreviewField = field;
+        break;
+      }
+    }
+    showPreviewSetups();
   }
 
   /** A new layout that starts as what {@code keyboard} looks like now. */
@@ -349,6 +528,11 @@ public class CustomLayoutEditorFragment extends Fragment
     int row = selectedRow() != CustomLayoutEditorView.NOTHING ? selectedRow() : mRememberedRow;
     if (row >= rows) row = CustomLayoutEditorView.NOTHING;
     if (tab == TAB_KEY) {
+      // a key can only be worked on where it is seen
+      if (row != CustomLayoutEditorView.NOTHING && !mLayout.rows.get(row).showsIn(mPreviewField)) {
+        row = CustomLayoutEditorView.NOTHING;
+        mKeyboardView.setSelection(row, row);
+      }
       // a key that was just tapped on the keyboard stays picked; otherwise the remembered one
       if (mKeyboardView.getSelectedKeys().isEmpty()) {
         final boolean remembered =
@@ -360,7 +544,8 @@ public class CustomLayoutEditorFragment extends Fragment
       }
     } else if (tab == TAB_ROW) {
       mKeyboardView.setSelection(
-          row == CustomLayoutEditorView.NOTHING ? rows - 1 : row, CustomLayoutEditorView.NOTHING);
+          row == CustomLayoutEditorView.NOTHING ? lastShownRow() : row,
+          CustomLayoutEditorView.NOTHING);
     } else {
       mKeyboardView.setSelection(CustomLayoutEditorView.NOTHING, CustomLayoutEditorView.NOTHING);
     }
@@ -373,8 +558,9 @@ public class CustomLayoutEditorFragment extends Fragment
         PreferenceManager.getDefaultSharedPreferences(requireContext())
             .getBoolean(PREF_PREVIEW_AT_BOTTOM, false);
     final LinearLayout root = requireView().findViewById(R.id.custom_layout_root);
-    root.removeView(mKeyboardView);
-    root.addView(mKeyboardView, atBottom ? root.getChildCount() : 0);
+    final View preview = root.findViewById(R.id.custom_layout_preview);
+    root.removeView(preview);
+    root.addView(preview, atBottom ? root.getChildCount() : 0);
   }
 
   private void flipPreviewPlace() {
@@ -408,14 +594,17 @@ public class CustomLayoutEditorFragment extends Fragment
   /** Shows the layout as it is now: the keyboard, the keys left to add, the picked key. */
   private void showLayout() {
     noteChange(null);
-    final AnyKeyboard keyboard = load(mBase.withLayout(mLayout, 0));
-    mKeyboardView.setKeyboard(keyboard, null, null);
     if (mShownTab == TAB_ROW) {
-      // on this tab a whole row is picked, also after a row was added or removed
-      final int row = selectedRow();
-      mKeyboardView.setSelection(
-          row == CustomLayoutEditorView.NOTHING ? mLayout.rows.size() - 1 : row,
-          CustomLayoutEditorView.NOTHING);
+      // on this tab a whole row is picked, also after a row was added or removed, and the
+      // keyboard is the one of a field that has the row
+      final int row =
+          selectedRow() == CustomLayoutEditorView.NOTHING ? lastShownRow() : selectedRow();
+      mKeyboardView.setSelection(row, CustomLayoutEditorView.NOTHING);
+      showFieldOf(row);
+    }
+    showKeyboard();
+    final AnyKeyboard keyboard = mKeyboardView.getKeyboard();
+    if (mShownTab == TAB_ROW) {
       showRowPanel();
       return;
     } else if (mShownTab == TAB_KEYBOARD) {
@@ -528,6 +717,47 @@ public class CustomLayoutEditorFragment extends Fragment
     removeRow.setVisibility(mLayout.rows.size() > 1 ? View.VISIBLE : View.GONE);
     ((TextView) root.findViewById(R.id.custom_layout_even_row))
         .setText(R.string.custom_layout_even_row);
+    root.findViewById(R.id.custom_layout_move_row_up)
+        .setVisibility(pickedRow > 0 ? View.VISIBLE : View.GONE);
+    root.findViewById(R.id.custom_layout_move_row_down)
+        .setVisibility(pickedRow < mLayout.rows.size() - 1 ? View.VISIBLE : View.GONE);
+
+    final ChipGroup fields = root.findViewById(R.id.custom_layout_row_fields);
+    fields.removeAllViews();
+    for (int i = 0; i < CustomLayout.FIELDS.length; i++) {
+      final int field = CustomLayout.FIELDS[i];
+      final TextView chip =
+          addChip(
+              fields,
+              getString(FIELD_NAMES[i]),
+              "field:" + field,
+              v -> {
+                row.setShownIn(field, !row.showsIn(field));
+                showLayout();
+              });
+      if (row.showsIn(field)) markChip(chip);
+    }
+  }
+
+  /** A second row like the picked one, under it. It is picked. */
+  private void duplicateRow() {
+    final int row = selectedRow();
+    if (row == CustomLayoutEditorView.NOTHING) return;
+    mLayout.rows.add(row + 1, mLayout.rows.get(row).copy());
+    mKeyboardView.setSelection(row + 1, CustomLayoutEditorView.NOTHING);
+    showLayout();
+  }
+
+  /** Moves the picked row one place up or down. */
+  private void moveRow(int by) {
+    final int row = selectedRow();
+    final int target = row + by;
+    if (row == CustomLayoutEditorView.NOTHING || target < 0 || target >= mLayout.rows.size()) {
+      return;
+    }
+    mLayout.rows.add(target, mLayout.rows.remove(row));
+    mKeyboardView.setSelection(target, CustomLayoutEditorView.NOTHING);
+    showLayout();
   }
 
   /** Shows where an edge of the picked key is, in percent of the row from its start. */
@@ -695,7 +925,7 @@ public class CustomLayoutEditorFragment extends Fragment
 
   /** {@code tag} is the key code the chip stands for, if it stands for one. */
   private TextView addChip(
-      ViewGroup group, String label, @Nullable Integer tag, View.OnClickListener onClick) {
+      ViewGroup group, String label, @Nullable Object tag, View.OnClickListener onClick) {
     final TextView chip =
         new TextView(new ContextThemeWrapper(requireContext(), R.style.CustomLayout_Chip), null, 0);
     chip.setText(label);
@@ -985,7 +1215,7 @@ public class CustomLayoutEditorFragment extends Fragment
       }
     }
     noteChange("height " + sizeRow);
-    mKeyboardView.setKeyboard(load(mBase.withLayout(mLayout, 0)), null, null);
+    showKeyboard();
   }
 
   private static int toProgress(float height) {
@@ -1018,6 +1248,13 @@ public class CustomLayoutEditorFragment extends Fragment
       if (thisRow == ALL_LETTER_ROWS) label.setText(R.string.custom_layout_all_letter_rows);
       else if (thisRow == rowCount - 1) label.setText(R.string.custom_layout_bottom_row);
       else label.setText(getString(R.string.custom_layout_row, thisRow + 1));
+      if (thisRow >= 0 && mLayout.rows.get(thisRow).fields != CustomLayout.ALL_FIELDS) {
+        label.setText(
+            getString(
+                R.string.custom_layout_row_for_fields,
+                label.getText(),
+                fieldNames(mLayout.rows.get(thisRow))));
+      }
 
       final EditText value = item.findViewById(R.id.size_row_value);
       final TickSeekBar slider = item.findViewById(R.id.size_row_slider);
@@ -1115,7 +1352,7 @@ public class CustomLayoutEditorFragment extends Fragment
   }
 
   private void showTotalHeight() {
-    final float total = mLayout.totalHeight();
+    final float total = mLayout.totalHeight(mPreviewField);
     final float rowHeightDp =
         mKeyboardView.getThemedKeyboardDimens().getNormalKeyHeight()
             / getResources().getDisplayMetrics().density;
@@ -1255,6 +1492,19 @@ public class CustomLayoutEditorFragment extends Fragment
       Toast.makeText(requireContext(), R.string.custom_layout_missing_keys, Toast.LENGTH_LONG)
           .show();
       return;
+    }
+    // the same for the keyboard of each kind of field, now that rows can be for some fields only
+    for (int field : CustomLayout.FIELDS) {
+      if (!mLayout.contains(KeyCodes.SPACE, field)
+          || !mLayout.contains(KeyCodes.ENTER, field)
+          || !mLayout.contains(KeyCodes.DELETE, field)) {
+        Toast.makeText(
+                requireContext(),
+                getString(R.string.custom_layout_missing_keys_in_field, fieldName(field)),
+                Toast.LENGTH_LONG)
+            .show();
+        return;
+      }
     }
     final String name = mNameView.getText().toString().trim();
     if (!name.isEmpty()) mLayout.name = name;

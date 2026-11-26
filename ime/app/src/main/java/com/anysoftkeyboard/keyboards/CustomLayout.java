@@ -28,7 +28,30 @@ public final class CustomLayout {
   /** The code of an entry that only takes space. */
   public static final int GAP = 0;
 
+  /**
+   * The kinds of text field a keyboard is shown for (the {@link Keyboard.KeyboardRowModeId}s). A
+   * row can be limited to some of them, see {@link Row#fields}.
+   */
+  public static final int[] FIELDS = {
+    Keyboard.KEYBOARD_ROW_MODE_NORMAL,
+    Keyboard.KEYBOARD_ROW_MODE_IM,
+    Keyboard.KEYBOARD_ROW_MODE_URL,
+    Keyboard.KEYBOARD_ROW_MODE_EMAIL,
+    Keyboard.KEYBOARD_ROW_MODE_PASSWORD
+  };
+
+  /** The names of {@link #FIELDS} in the JSON form. */
+  private static final String[] FIELD_NAMES = {"text", "chat", "url", "email", "password"};
+
+  public static final int ALL_FIELDS = bitsOfAllFields();
+
   private static final float ROW_WIDTH = 100f;
+
+  private static int bitsOfAllFields() {
+    int bits = 0;
+    for (int field : FIELDS) bits |= 1 << field;
+    return bits;
+  }
 
   @NonNull public final String id;
   @NonNull public String name;
@@ -59,7 +82,40 @@ public final class CustomLayout {
 
   public static final class Row {
     public float height = 1f;
+
+    /**
+     * The fields this row is shown for: one bit per entry of {@link #FIELDS}. A row for all fields
+     * is the usual case; a row for some of them is how a layout gets, for example, a bottom row of
+     * its own for web addresses.
+     */
+    public int fields = ALL_FIELDS;
+
     public final List<Key> keys = new ArrayList<>();
+
+    /** Whether the row is part of the keyboard shown for the field kind {@code mode}. */
+    public boolean showsIn(@Keyboard.KeyboardRowModeId int mode) {
+      return (fields & (1 << mode)) != 0;
+    }
+
+    /** Shows or hides the row for the field kind {@code mode}; it stays in one field at least. */
+    public void setShownIn(@Keyboard.KeyboardRowModeId int mode, boolean shown) {
+      final int changed = shown ? fields | (1 << mode) : fields & ~(1 << mode);
+      if (changed != 0) fields = changed;
+    }
+
+    /** A second row like this one. */
+    @NonNull
+    public Row copy() {
+      final Row copy = new Row();
+      copy.height = height;
+      copy.fields = fields;
+      for (Key key : keys) {
+        final Key keyCopy = new Key(key.code, key.width);
+        keyCopy.popup = key.popup;
+        copy.keys.add(keyCopy);
+      }
+      return copy;
+    }
 
     public float totalWidth() {
       float total = 0;
@@ -255,9 +311,23 @@ public final class CustomLayout {
     return false;
   }
 
-  public float totalHeight() {
+  /** Whether a row that is shown for the field kind {@code mode} has the key {@code code}. */
+  public boolean contains(int code, @Keyboard.KeyboardRowModeId int mode) {
+    for (Row row : rows) {
+      if (!row.showsIn(mode)) continue;
+      for (Key key : row.keys) {
+        if (key.code == code) return true;
+      }
+    }
+    return false;
+  }
+
+  /** The height, in rows, of the keyboard shown for the field kind {@code mode}. */
+  public float totalHeight(@Keyboard.KeyboardRowModeId int mode) {
     float total = 0;
-    for (Row row : rows) total += row.height;
+    for (Row row : rows) {
+      if (row.showsIn(mode)) total += row.height;
+    }
     return total;
   }
 
@@ -332,7 +402,15 @@ public final class CustomLayout {
         if (key.popup != null) jsonKey.put(key.popup);
         jsonKeys.put(jsonKey);
       }
-      jsonRows.put(new JSONObject().put("height", (double) row.height).put("keys", jsonKeys));
+      final JSONObject jsonRow = new JSONObject().put("height", (double) row.height);
+      if (row.fields != ALL_FIELDS) {
+        final JSONArray jsonFields = new JSONArray();
+        for (int i = 0; i < FIELDS.length; i++) {
+          if (row.showsIn(FIELDS[i])) jsonFields.put(FIELD_NAMES[i]);
+        }
+        jsonRow.put("fields", jsonFields);
+      }
+      jsonRows.put(jsonRow.put("keys", jsonKeys));
     }
     return new JSONObject()
         .put("id", id)
@@ -354,6 +432,17 @@ public final class CustomLayout {
       final JSONObject jsonRow = jsonRows.getJSONObject(rowIndex);
       final Row row = new Row();
       row.height = (float) jsonRow.getDouble("height");
+      final JSONArray jsonFields = jsonRow.optJSONArray("fields");
+      if (jsonFields != null) {
+        int fields = 0;
+        for (int i = 0; i < jsonFields.length(); i++) {
+          for (int field = 0; field < FIELDS.length; field++) {
+            if (FIELD_NAMES[field].equals(jsonFields.getString(i))) fields |= 1 << FIELDS[field];
+          }
+        }
+        // names this version does not know leave nothing: such a row is shown everywhere
+        if (fields != 0) row.fields = fields;
+      }
       final JSONArray jsonKeys = jsonRow.getJSONArray("keys");
       for (int keyIndex = 0; keyIndex < jsonKeys.length(); keyIndex++) {
         final JSONArray jsonKey = jsonKeys.getJSONArray(keyIndex);

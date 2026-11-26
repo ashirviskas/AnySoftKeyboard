@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.anysoftkeyboard.RobolectricFragmentTestCase;
 import com.anysoftkeyboard.api.KeyCodes;
 import com.anysoftkeyboard.keyboards.CustomLayout;
+import com.anysoftkeyboard.keyboards.Keyboard;
 import com.anysoftkeyboard.keyboards.KeyboardAddOnAndBuilder;
 import com.anysoftkeyboard.keyboards.KeyboardFactory;
 import com.anysoftkeyboard.keyboards.views.CustomLayoutEditorView;
@@ -50,6 +51,23 @@ public class CustomLayoutEditorFragmentTest
 
   private static CustomLayoutEditorView keyboardView(CustomLayoutEditorFragment editor) {
     return editor.requireView().findViewById(R.id.custom_layout_keyboard);
+  }
+
+  private static View preview(CustomLayoutEditorFragment editor) {
+    return editor.requireView().findViewById(R.id.custom_layout_preview);
+  }
+
+  /** Taps the chip tagged {@code tag} in the group {@code groupId}. */
+  private static void clickChip(CustomLayoutEditorFragment editor, int groupId, String tag) {
+    editor.requireView().findViewById(groupId).findViewWithTag(tag).performClick();
+    TestRxSchedulers.drainAllTasks();
+  }
+
+  private static Keyboard.Key findKey(CustomLayoutEditorView view, int code) {
+    for (Keyboard.Key key : view.getKeyboard().getKeys()) {
+      if (key.getPrimaryCode() == code) return key;
+    }
+    return null;
   }
 
   /** The chip that offers the key {@code code}, or null when it is not offered. */
@@ -494,7 +512,10 @@ public class CustomLayoutEditorFragmentTest
         View.VISIBLE, root.findViewById(R.id.custom_layout_keyboard_panel).getVisibility());
     Assert.assertEquals(CustomLayoutEditorView.NOTHING, keyboard.getSelectedRow());
     Assert.assertEquals(
-        String.format(java.util.Locale.ROOT, "Total %.2f rows", layoutOf(keyboard).totalHeight()),
+        String.format(
+            java.util.Locale.ROOT,
+            "Total %.2f rows",
+            layoutOf(keyboard).totalHeight(Keyboard.KEYBOARD_ROW_MODE_NORMAL)),
         textOf(editor, R.id.custom_layout_total_height));
 
     // "all rows above the bottom row" with its slider, then the five rows
@@ -583,10 +604,11 @@ public class CustomLayoutEditorFragmentTest
   public void testTheKeyboardCanBeShownUnderTheControlsAndThatIsKept() {
     CustomLayoutEditorFragment editor = openEditorForEnglish();
     ViewGroup root = editor.requireView().findViewById(R.id.custom_layout_root);
-    Assert.assertSame(keyboardView(editor), root.getChildAt(0));
+    Assert.assertSame(preview(editor), root.getChildAt(0));
+    Assert.assertSame(preview(editor), keyboardView(editor).getParent());
 
     select(editor, R.id.custom_layout_flip);
-    Assert.assertSame(keyboardView(editor), root.getChildAt(root.getChildCount() - 1));
+    Assert.assertSame(preview(editor), root.getChildAt(root.getChildCount() - 1));
 
     // another layout opens the same way
     select(editor, R.id.custom_layout_save);
@@ -595,9 +617,9 @@ public class CustomLayoutEditorFragmentTest
     TestRxSchedulers.drainAllTasks();
     editor = (CustomLayoutEditorFragment) getCurrentFragment();
     root = editor.requireView().findViewById(R.id.custom_layout_root);
-    Assert.assertSame(keyboardView(editor), root.getChildAt(root.getChildCount() - 1));
+    Assert.assertSame(preview(editor), root.getChildAt(root.getChildCount() - 1));
     select(editor, R.id.custom_layout_flip);
-    Assert.assertSame(keyboardView(editor), root.getChildAt(0));
+    Assert.assertSame(preview(editor), root.getChildAt(0));
   }
 
   @Test
@@ -720,5 +742,147 @@ public class CustomLayoutEditorFragmentTest
     Assert.assertFalse(layoutOf(keyboard).contains('q'));
     select(editor, R.id.custom_layout_reset);
     Assert.assertEquals('q', layoutOf(keyboard).rows.get(1).keys.get(0).code);
+  }
+
+  @Test
+  public void testTheKeyboardCanBeLookedAtForEachKindOfField() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    Assert.assertEquals(
+        Keyboard.KEYBOARD_ROW_MODE_NORMAL, keyboard.getKeyboard().getKeyboardMode());
+    Assert.assertNull(findKey(keyboard, '@'));
+
+    clickChip(
+        editor, R.id.custom_layout_preview_setups, "field:" + Keyboard.KEYBOARD_ROW_MODE_EMAIL);
+    Assert.assertEquals(Keyboard.KEYBOARD_ROW_MODE_EMAIL, keyboard.getKeyboard().getKeyboardMode());
+    Assert.assertNotNull(findKey(keyboard, '@'));
+
+    // editing goes on there: a key is picked and removed
+    final int rows = layoutOf(keyboard).rows.size();
+    final int keysBefore = layoutOf(keyboard).rows.get(1).keys.size();
+    tap(keyboard, 1, 0);
+    click(editor, R.id.custom_layout_remove_key);
+    Assert.assertEquals(keysBefore - 1, layoutOf(keyboard).rows.get(1).keys.size());
+    Assert.assertEquals(Keyboard.KEYBOARD_ROW_MODE_EMAIL, keyboard.getKeyboard().getKeyboardMode());
+    Assert.assertEquals(rows, layoutOf(keyboard).rows.size());
+  }
+
+  @Test
+  public void testSplitIsForLookingOnly() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final View hint = editor.requireView().findViewById(R.id.custom_layout_preview_hint);
+    Assert.assertEquals(View.GONE, hint.getVisibility());
+    final Keyboard.Key q = findKey(keyboard, 'q');
+    final Keyboard.Key p = findKey(keyboard, 'p');
+    final int between = p.x - q.x;
+
+    clickChip(editor, R.id.custom_layout_preview_setups, "shape:Split");
+    Assert.assertEquals(View.VISIBLE, hint.getVisibility());
+    Assert.assertTrue(
+        findKey(keyboard, 'p').x - findKey(keyboard, 'q').x > between
+            || findKey(keyboard, 'q').width < q.width);
+    // a touch picks nothing
+    final Rect slot = keyboard.getKeyboard().getCustomLayoutSlots()[1][2];
+    touch(keyboard, MotionEvent.ACTION_DOWN, slot.centerX(), slot.centerY());
+    touch(keyboard, MotionEvent.ACTION_UP, slot.centerX(), slot.centerY());
+    Assert.assertEquals(CustomLayoutEditorView.NOTHING, keyboard.getSelectedRow());
+
+    clickChip(editor, R.id.custom_layout_preview_setups, "shape:None");
+    Assert.assertEquals(View.GONE, hint.getVisibility());
+    Assert.assertEquals(q.width, findKey(keyboard, 'q').width);
+    tap(keyboard, 1, 2);
+    Assert.assertEquals(1, keyboard.getSelectedRow());
+  }
+
+  @Test
+  public void testARowCanBeDuplicatedMovedAndShownForSomeFields() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    final int rows = layoutOf(keyboard).rows.size();
+    final int heightBefore = keyboard.getKeyboard().getHeight();
+    final String url = "field:" + Keyboard.KEYBOARD_ROW_MODE_URL;
+
+    // the Row tab starts at the bottom row; its copy is under it and picked
+    openTab(editor, 1);
+    click(editor, R.id.custom_layout_duplicate_row);
+    Assert.assertEquals(rows + 1, layoutOf(keyboard).rows.size());
+    Assert.assertEquals(rows, keyboard.getSelectedRow());
+    Assert.assertTrue(keyboard.getKeyboard().getHeight() > heightBefore);
+
+    // the copy is kept for web addresses only: the keyboard shown becomes that of such a field
+    for (int field : CustomLayout.FIELDS) {
+      if (field != Keyboard.KEYBOARD_ROW_MODE_URL) {
+        clickChip(editor, R.id.custom_layout_row_fields, "field:" + field);
+      }
+    }
+    Assert.assertEquals(
+        1 << Keyboard.KEYBOARD_ROW_MODE_URL, layoutOf(keyboard).rows.get(rows).fields);
+    Assert.assertEquals(Keyboard.KEYBOARD_ROW_MODE_URL, keyboard.getKeyboard().getKeyboardMode());
+    // and it cannot be taken out of its last field
+    clickChip(editor, R.id.custom_layout_row_fields, url);
+    Assert.assertEquals(
+        1 << Keyboard.KEYBOARD_ROW_MODE_URL, layoutOf(keyboard).rows.get(rows).fields);
+
+    // the row above it is taken out of web addresses: one bottom row per field again
+    click(editor, R.id.custom_layout_row_up);
+    Assert.assertEquals(rows - 1, keyboard.getSelectedRow());
+    clickChip(editor, R.id.custom_layout_row_fields, url);
+    Assert.assertFalse(
+        layoutOf(keyboard).rows.get(rows - 1).showsIn(Keyboard.KEYBOARD_ROW_MODE_URL));
+    Assert.assertEquals(
+        Keyboard.KEYBOARD_ROW_MODE_NORMAL, keyboard.getKeyboard().getKeyboardMode());
+    Assert.assertEquals(heightBefore, keyboard.getKeyboard().getHeight());
+    Assert.assertEquals(0, keyboard.getKeyboard().getCustomLayoutSlots()[rows].length);
+
+    // stepping to the row for web addresses shows that keyboard
+    click(editor, R.id.custom_layout_row_down);
+    Assert.assertEquals(rows, keyboard.getSelectedRow());
+    Assert.assertEquals(Keyboard.KEYBOARD_ROW_MODE_URL, keyboard.getKeyboard().getKeyboardMode());
+    Assert.assertEquals(heightBefore, keyboard.getKeyboard().getHeight());
+
+    // the list of the Keyboard tab says what the row is for
+    openTab(editor, 2);
+    final ViewGroup list = editor.requireView().findViewById(R.id.custom_layout_size_rows);
+    final TextView last =
+        list.getChildAt(list.getChildCount() - 1).findViewById(R.id.size_row_label);
+    Assert.assertTrue(last.getText().toString(), last.getText().toString().endsWith("Web address"));
+
+    // rows move
+    openTab(editor, 1);
+    click(editor, R.id.custom_layout_move_row_up);
+    Assert.assertEquals(rows - 1, keyboard.getSelectedRow());
+    Assert.assertEquals(
+        1 << Keyboard.KEYBOARD_ROW_MODE_URL, layoutOf(keyboard).rows.get(rows - 1).fields);
+    click(editor, R.id.custom_layout_move_row_down);
+    Assert.assertEquals(rows, keyboard.getSelectedRow());
+
+    // it is all one keyboard, saved as such
+    select(editor, R.id.custom_layout_save);
+    Assert.assertEquals(1, factory().getCustomLayouts().size());
+    Assert.assertEquals(
+        1 << Keyboard.KEYBOARD_ROW_MODE_URL,
+        factory().getCustomLayouts().get(0).rows.get(rows).fields);
+  }
+
+  @Test
+  public void testDoesNotSaveWhenAFieldHasNoEnter() {
+    final CustomLayoutEditorFragment editor = openEditorForEnglish();
+    final CustomLayoutEditorView keyboard = keyboardView(editor);
+    // the bottom row (the one with Enter) is taken out of password fields
+    openTab(editor, 1);
+    Assert.assertTrue(
+        indexOf(layoutOf(keyboard).rows.get(keyboard.getSelectedRow()), KeyCodes.ENTER) >= 0);
+    clickChip(
+        editor, R.id.custom_layout_row_fields, "field:" + Keyboard.KEYBOARD_ROW_MODE_PASSWORD);
+    select(editor, R.id.custom_layout_save);
+    Assert.assertTrue(factory().getCustomLayouts().isEmpty());
+    Assert.assertSame(editor, getCurrentFragment());
+
+    // such a field's keyboard can still be looked at, and one with no rows at all is not shown
+    clickChip(
+        editor, R.id.custom_layout_preview_setups, "field:" + Keyboard.KEYBOARD_ROW_MODE_PASSWORD);
+    Assert.assertEquals(
+        Keyboard.KEYBOARD_ROW_MODE_PASSWORD, keyboard.getKeyboard().getKeyboardMode());
   }
 }

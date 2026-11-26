@@ -833,6 +833,17 @@ public abstract class AnyKeyboard extends Keyboard {
     }
   }
 
+  /**
+   * Squeezes the keys as {@link #setCondensedKeys(CondenseType)} does, into {@code factor} of the
+   * width whatever this screen would use. For showing what split looks like on a screen that does
+   * not split.
+   */
+  public void setCondensedKeys(CondenseType condenseType, float factor) {
+    if (mKeyboardCondenser.setCondensedKeys(condenseType, getKeyboardDimens(), factor)) {
+      computeNearestNeighbors();
+    }
+  }
+
   public interface HardKeyboardAction {
     int getKeyCode();
 

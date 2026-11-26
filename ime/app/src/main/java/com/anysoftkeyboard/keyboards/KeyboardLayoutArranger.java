@@ -23,8 +23,9 @@ final class KeyboardLayoutArranger {
    * @param placed receives the keys of the layout, top to bottom and left to right.
    * @param plainKeysRow the row new plain keys are attached to.
    * @param normalKeyHeight the height, in pixels, of a row of height 1.
+   * @param mode the kind of field the keyboard is for; rows that are not for it are left out.
    * @return the place of every entry of the layout (also of the gaps, which have no key), indexed
-   *     as the rows and keys of the layout.
+   *     as the rows and keys of the layout. A row that is left out has no places.
    */
   @NonNull
   static Rect[][] arrange(
@@ -39,10 +40,19 @@ final class KeyboardLayoutArranger {
     final float halfGap = dimens.getKeyHorizontalGap() / 2;
     final Rect[][] slots = new Rect[layout.rows.size()][];
     int addressKey = addressKeyFor(mode);
+    int lastShownRow = -1;
+    for (int rowIndex = 0; rowIndex < slots.length; rowIndex++) {
+      if (layout.rows.get(rowIndex).showsIn(mode)) lastShownRow = rowIndex;
+    }
     float y = dimens.getRowVerticalGap();
     for (int rowIndex = 0; rowIndex < slots.length; rowIndex++) {
       final CustomLayout.Row row = layout.rows.get(rowIndex);
-      final boolean bottomRow = rowIndex == slots.length - 1;
+      if (!row.showsIn(mode)) {
+        slots[rowIndex] = new Rect[0];
+        continue;
+      }
+      // a bottom row made for some fields only is left as the user made it
+      final boolean bottomRow = rowIndex == lastShownRow && row.fields == CustomLayout.ALL_FIELDS;
       final int height = Math.round(normalKeyHeight * row.height);
       final float pixelsPerWidth = keyboardWidth / Math.max(1f, row.totalWidth());
       slots[rowIndex] = new Rect[row.keys.size()];
